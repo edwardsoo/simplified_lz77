@@ -1,162 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include "simplified_lz77.h"
 
-#define where() printf("%u\n", __LINE__)
-
-typedef struct bit_stream {
-  FILE *file;
-
-  /* The position of the next bit to read in a byte:
-   * If it's a 0 then the next bit is the the MSB of the next byte in stream.
-   * Otherwise it's the bit_pos-th MSB of last_byte.
-   */
-  uint8_t bit_pos;
-  uint8_t last_byte;
-
-  /*
-   * Size of file in bytes and number of bytes read.
-   */
-  uint64_t file_size;
-  uint64_t read;
-} bit_stream_t;
-
-
-bit_stream_t* bit_stream_new (FILE *file) {
-  struct stat file_stat;
-  bit_stream_t* stream;
-
-  if (fstat (fileno (file), &file_stat) != 0) {
-    return NULL;
-  }
-
-  stream = malloc (sizeof (bit_stream_t));
-  if (stream) {
-    stream->file = file;
-    stream->file_size = file_stat.st_size;
-    stream->read = 0;
-    stream->bit_pos = 0;
-    stream->last_byte = 0;
-  }
-  return stream;
-}
-
-/*
- * Read 1,4,8 or 12 bits from stream starting at the next bit position 
- * in the bit stream, value is put in result
- * Return 0 for success and -1 for failure.
- * Value of result is not modified if operation failed.
- */
-int read_12bits (bit_stream_t *stream, uint16_t *result) {
-  uint16_t value;
-  int c;
-
-  if (stream->bit_pos == 0) {
-    // Cannot use last_byte; need to read 2 bytes from stream
-    if (stream->file_size < stream->read + 2) {
-      return -1;
-    }
-    c = fgetc (stream->file);
-    value = (c << 4);
-    c = fgetc (stream->file);
-    value |= (c >> 4);
-    stream->last_byte = c;
-    stream->bit_pos = 4;
-    stream->read += 2;
-
-  } else if (stream->bit_pos > 4) {
-    // last_byte has less than 4 unused bits; need to read 2 bytes from stream
-    if (stream->file_size < stream->read + 2) {
-      return -1;
-    }
-    value = (stream->last_byte << (stream->bit_pos + 4));
-    c = fgetc (stream->file);
-    value |= (c << (stream->bit_pos - 4));
-    c = fgetc (stream->file);
-    value |= (c >> (12 - stream->bit_pos));
-    stream->last_byte = c;
-    stream->bit_pos -= 4;
-    stream->read += 2;
-
-  } else {
-    // last_byte has at least 4 unused bits; need to read 1 byte from stream
-    if (stream->file_size < stream->read + 1) {
-      return -1;
-    }
-    value = (stream->last_byte << (stream->bit_pos + 4));
-    c = fgetc (stream->file);
-    value |= (c >> (4 - stream->bit_pos));
-    stream->last_byte = c;
-    stream->bit_pos = (stream->bit_pos + 4) % 8;
-    stream->read += 1;
-  }
-
-  *result = (value & 0x0000FFF);
-  return 0;
-}
-
-int read_1bit (bit_stream_t *stream, uint8_t *result) {
-  uint8_t value;
-  int c;
-
-  if (stream->bit_pos) {
-    // last_byte has at least 1 unused bit; do not need to read from stream
-    value = (stream->last_byte >> (7 - stream->bit_pos));
-
-  } else {
-    // Cannot use last_byte; need to read 1 byte from stream
-    if (stream->read >= stream->file_size) {
-      return -1;
-    }
-    c = fgetc (stream->file);
-    value = (c >> 7);
-    stream->last_byte = c;
-    stream->read += 1;
-  }
-
-  stream->bit_pos = (stream->bit_pos + 1) % 8;
-  *result = (value & 0x1);
-  return 0;
-}
-
-int read_4bits (bit_stream_t *stream, uint8_t *result) {
-  uint8_t value;
-  int c;
-
-  if (stream->bit_pos == 0) {
-    // Cannot use last_byte; need read 1 byte from stream
-    if (stream->file_size < stream->read + 1) {
-      return -1;
-    }
-    c = fgetc (stream->file);
-    value = (c >> 4);
-    stream->last_byte = c;
-    stream->read += 1;
-    stream->bit_pos = 4;
-
-  } else if (stream->bit_pos > 4) {
-    // last_byte has less than 4 unused bits; need to read 1 byte from stream
-    if (stream->file_size < stream->read + 1) {
-      return -1;
-    }
-    value = (stream->last_byte << (stream->bit_pos - 4));
-    c = fgetc (stream->file);
-    value |= (c >> (12 - stream->bit_pos));
-    stream->last_byte = c;
-    stream->read += 1;
-    stream->bit_pos = stream->bit_pos - 4;
-
-  } else {
-    // last_byte has at least 4 unused bits; do not need to read from stream
-    value = (stream->last_byte >> (4 - stream->bit_pos));
-    stream->bit_pos += 4;
-  }
-
-  *result = (value & 0xF);
-  return 0;
-}
+#define WHERE() printf("%u\n", __LINE__)
 
 void print_uint4_bits (uint8_t value) {
   int mask = 0x8;
@@ -230,6 +79,41 @@ void print_12bits(FILE *in) {
   }
 }
 
+void decompress_file (FILE *in, FILE *out) {
+  uint8_t op_bit, byte, *copy, i;
+  uint16_t pointer;
+  bit_stream_t *in_stream;
+  queue_t *queue;
+
+  in_stream = bit_stream_new (in);
+  queue = queue_new (0x1000);
+  while (read_1bit (in_stream, &op_bit) == 0) {
+    if (!op_bit) {
+      if (read_8bits (in_stream, &byte) != 0) {
+        break;
+      }
+      queue_add (queue, byte);
+      fputc (byte, out);
+    } else {
+      if (read_12bits (in_stream, &pointer) != 0) {
+        break;
+      }
+      if (read_4bits (in_stream, &byte) != 0) {
+        break;
+      }
+      copy = queue_sub_array (queue, queue->length - 1 - pointer, byte);
+      for (i = 0; i < byte; i++) {
+        queue_add (queue, copy[i]);
+      }
+      fwrite (copy, 1, byte, out);
+      free (copy);
+    }
+  }
+  bit_stream_destroy (&in_stream);
+  queue_destroy (&queue);
+  fclose (out);
+}
+
 int main (int argc, char* argv[]) {
   int c;
   int compress;
@@ -274,12 +158,10 @@ int main (int argc, char* argv[]) {
     perror ("fopen");
     return 1;
   }
-  print_bytes (in);
-  // print_12bits(in);
-  // print_4bits(in);
-  print_bits(in);
 
-  fclose (in);
-  fclose (out);
+  if (!compress) {
+    decompress_file (in, out);
+  }
+
   return 0;
 }
