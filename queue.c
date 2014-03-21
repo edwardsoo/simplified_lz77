@@ -1,8 +1,8 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "simplified_lz77.h"
+#include "queue.h"
 
 queue_t* queue_new (int size) {
   queue_t *queue;

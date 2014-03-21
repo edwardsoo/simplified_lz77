@@ -1,8 +1,9 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <sys/stat.h>
-#include "simplified_lz77.h"
+#include "bit_stream.h"
+
 
 bit_in_stream_t* bit_in_stream_new (FILE *file) {
   struct stat file_stat;

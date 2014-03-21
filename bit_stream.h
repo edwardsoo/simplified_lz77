@@ -1,5 +1,5 @@
-#ifndef SIMPLIFIED_LZ77_H
-#define SIMPLIFIED_LZ77_H
+#ifndef BIT_STREAM_H
+#define BIT_STREAM_H
 
 /* A structure to help read from a file at bits level
  * The structure takes ownership of the opened file when created
@@ -28,6 +28,7 @@ int read_8bits (bit_in_stream_t *stream, uint8_t *result);
 int read_12bits (bit_in_stream_t *stream, uint16_t *result);
 
 
+
 /* A structure to help write to a file at bits level
  * The structure takes ownership of the opened file when created
  */
@@ -54,18 +55,4 @@ int write_4bits (bit_out_stream_t *stream, uint8_t value);
 int write_8bits (bit_out_stream_t *stream, uint8_t value);
 int write_12bits (bit_out_stream_t *stream, uint16_t value);
 
-
-/* A fixed size queue of bytes:
- * Queueing more element than size will overwrite the oldest element
- */
-typedef struct queue {
-  uint8_t *array;
-  int length, size, head;
-} queue_t;
-queue_t* queue_new (int size);
-void queue_destroy (queue_t **queue_ptr);
-uint8_t* queue_sub_array (queue_t *queue, int offset, int length);
-void queue_add (queue_t* queue, uint8_t byte);
-int queue_pop (queue_t *queue, uint8_t *element);
-int queue_get (queue_t *queue, int offset, uint8_t *element);
 #endif
