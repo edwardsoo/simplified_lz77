@@ -10,19 +10,19 @@ inline int min_int (int a, int b) {
 }
 
 prefix_tree_t *prefix_tree_new (
-    uint8_t *prefix, int len, uint64_t key, uint8_t has_key
+    uint8_t *key, int len, uint64_t value, uint8_t has_value
     ) {
   prefix_tree_t *tree = malloc (sizeof (prefix_tree_t));
   if (tree) {
     if (len) {
-      tree->prefix = malloc (sizeof (uint8_t) * len);
+      tree->key = malloc (sizeof (uint8_t) * len);
     } else {
-      tree->prefix = NULL;
+      tree->key = NULL;
     }
-    tree->prefix_len = len;
-    memcpy (tree->prefix, prefix, len);
-    tree->key = key;
-    tree->has_key = has_key;
+    tree->key_len = len;
+    memcpy (tree->key, key, len);
+    tree->value = value;
+    tree->has_value = has_value;
     tree->num_child = 0;
     memset (tree->child, 0, 0x100);
   }
@@ -38,66 +38,66 @@ void prefix_tree_destroy (prefix_tree_t **tree_p) {
       prefix_tree_destroy (tree->child + i);
     }
   }
-  free (tree->prefix);
+  free (tree->key);
   free (tree);
   *tree_p = NULL;
 }
 
 void prefix_tree_insert (
-    prefix_tree_t **tree_p, uint8_t *prefix, int len, uint64_t key
+    prefix_tree_t **tree_p, uint8_t *key, int len, uint64_t value
     ) {
   int matched;
   prefix_tree_t *tree, *new;
   tree = *tree_p;
 
   if (!tree) {
-    *tree_p = prefix_tree_new (prefix, len, key, 1);
+    *tree_p = prefix_tree_new (key, len, value, 1);
 
   } else {
-    if (tree->prefix_len == 0) { // At root
-      if (!tree->child[prefix[0]]) {
+    if (tree->key_len == 0) { // At root
+      if (!tree->child[key[0]]) {
         tree->num_child += 1;
       }
-      prefix_tree_insert (tree->child + prefix[0], prefix, len, key);
+      prefix_tree_insert (tree->child + key[0], key, len, value);
 
     } else {
-      matched = num_prefix_match (tree->prefix, prefix, tree->prefix_len, len);
+      matched = num_prefix_match (tree->key, key, tree->key_len, len);
       assert (matched > 0);
 
-      if (tree->prefix_len < len && matched == tree->prefix_len) {
-        // the tree's prefix is a subarray of the new prefix
-        if (!tree->child[prefix[0]]) {
+      if (tree->key_len < len && matched == tree->key_len) {
+        // the tree's key is a subarray of the new key
+        if (!tree->child[key[0]]) {
           tree->num_child += 1;
         }
-        prefix_tree_insert (tree->child + prefix[matched],
-            prefix + matched, len - matched, key);
+        prefix_tree_insert (tree->child + key[matched],
+            key + matched, len - matched, value);
 
-      } else if (tree->prefix_len > len && matched == len) {
-        // the new prefix is a subarray of the tree's prefix
-        new = prefix_tree_new (prefix, len, key, 1);
+      } else if (tree->key_len > len && matched == len) {
+        // the new key is a subarray of the tree's key
+        new = prefix_tree_new (key, len, value, 1);
         *tree_p = new;
         
-        new->child[tree->prefix[matched]] = tree;
+        new->child[tree->key[matched]] = tree;
         new->num_child = 1;
-        memmove (tree->prefix, tree->prefix + matched, tree->prefix_len - matched);
-        tree->prefix_len -= matched;
+        memmove (tree->key, tree->key + matched, tree->key_len - matched);
+        tree->key_len -= matched;
 
-      } else if (tree->prefix_len == len && matched == len) {
-        // exact prefix match
-        tree->key = key;
-        tree->has_key = 1;
+      } else if (tree->key_len == len && matched == len) {
+        // exact key match
+        tree->value = value;
+        tree->has_value = 1;
 
       } else {
         // no subarray relationship
-        new = prefix_tree_new (prefix, matched, 0, 0);
+        new = prefix_tree_new (key, matched, 0, 0);
         *tree_p = new;
 
-        new->child[tree->prefix[matched]] = tree;
-        memmove (tree->prefix, tree->prefix + matched, tree->prefix_len - matched);
-        tree->prefix_len -= matched;
+        new->child[tree->key[matched]] = tree;
+        memmove (tree->key, tree->key + matched, tree->key_len - matched);
+        tree->key_len -= matched;
 
-        new->child[prefix[matched]] = prefix_tree_new (prefix + matched,
-            len - matched, key, 1);
+        new->child[key[matched]] = prefix_tree_new (key + matched,
+            len - matched, value, 1);
         new->num_child = 2;
       }
     }
@@ -105,16 +105,16 @@ void prefix_tree_insert (
 }
 
 int prefix_tree_lookup (
-    prefix_tree_t *tree, uint8_t *prefix, int len, uint64_t *key
+    prefix_tree_t *tree, uint8_t *key, int len, uint64_t *value
     ) {
-  int matched = num_prefix_match (tree->prefix, prefix, tree->prefix_len, len);
+  int matched = num_prefix_match (tree->key, key, tree->key_len, len);
 
-  if (tree->prefix_len == matched && matched == len) {
-    *key = tree->key;
+  if (tree->key_len == matched && matched == len) {
+    *value = tree->value;
     return 0;
-  } else if (len > matched && tree->child[prefix[matched]]) {
-    return prefix_tree_lookup (tree->child[prefix[matched]], prefix + matched,
-        len - matched, key);
+  } else if (len > matched && tree->child[key[matched]]) {
+    return prefix_tree_lookup (tree->child[key[matched]], key + matched,
+        len - matched, value);
   } else {
     return -1;
   }
@@ -129,14 +129,14 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
   for (i = 0; i < 0x100; i++) {
     if (tree->child[i]) {
       child = tree->child[i];
-      ptr = child->prefix;
-      child->prefix = malloc (
-          sizeof(uint8_t) * (tree->prefix_len + child->prefix_len));
-      memcpy (child->prefix, tree->prefix, tree->prefix_len);
-      memcpy (child->prefix + tree->prefix_len, ptr, child->prefix_len);
-      child->prefix_len += tree->prefix_len;
+      ptr = child->key;
+      child->key = malloc (
+          sizeof(uint8_t) * (tree->key_len + child->key_len));
+      memcpy (child->key, tree->key, tree->key_len);
+      memcpy (child->key + tree->key_len, ptr, child->key_len);
+      child->key_len += tree->key_len;
       *tree_p = child;
-      free (tree->prefix);
+      free (tree->key);
       free (tree);
       tree = NULL;
       break;
@@ -145,7 +145,7 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
 }
 
 int prefix_tree_delete (
-    prefix_tree_t **tree_p, uint8_t *prefix, int len, int (*fn(void*)), void* arg
+    prefix_tree_t **tree_p, uint8_t *key, int len, int (*fn(void*)), void* arg
     ) {
   int matched, rc;
   prefix_tree_t *tree;
@@ -154,11 +154,11 @@ int prefix_tree_delete (
   if (!tree) {
     return -1;
   } else {
-    matched = num_prefix_match (tree->prefix, prefix, tree->prefix_len, len);
-    if (tree->prefix_len == matched && matched == len) {
-      if (tree->has_key) {
+    matched = num_prefix_match (tree->key, key, tree->key_len, len);
+    if (tree->key_len == matched && matched == len) {
+      if (tree->has_value) {
         if (tree->num_child > 1) {
-          tree->has_key = 0;
+          tree->has_value = 0;
         } else if (tree->num_child == 0) {
           prefix_tree_destroy (tree_p);
         } else {
@@ -167,14 +167,14 @@ int prefix_tree_delete (
       }
       return 0;
 
-    } else if (len > matched && tree->child[prefix[matched]]) {
-      rc = prefix_tree_delete (tree->child + prefix[matched], prefix + matched,
+    } else if (len > matched && tree->child[key[matched]]) {
+      rc = prefix_tree_delete (tree->child + key[matched], key + matched,
           len - matched, fn, arg);
       if (rc == 0) {
-        if (tree->child[prefix[matched]] == NULL) {
+        if (tree->child[key[matched]] == NULL) {
           tree->num_child -= 1;
         }
-        if (!tree->has_key && tree->num_child == 1) {
+        if (!tree->has_value && tree->num_child == 1) {
           merge_with_only_child (tree_p);
         }
       }
@@ -187,10 +187,10 @@ int prefix_tree_delete (
 }
 
 
-/* Returns the number of matching bytes in 2 prefix arrays
+/* Returns the number of matching bytes in 2 key arrays
  */
-int num_prefix_match (uint8_t *prefix1, uint8_t *prefix2, int len1, int len2) {
+int num_prefix_match (uint8_t *key1, uint8_t *key2, int len1, int len2) {
   int i;
-  for (i = 0; i < min_int (len1, len2) && prefix1[i] == prefix2[i]; i++);
+  for (i = 0; i < min_int (len1, len2) && key1[i] == key2[i]; i++);
   return i;
 }
