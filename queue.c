@@ -72,3 +72,11 @@ int queue_pop (queue_t *queue, uint8_t *element) {
   queue->size -= 1;
   return 0;
 }
+
+int queue_get (queue_t *queue, int offset, uint8_t *element) {
+  if (offset >= queue->length) {
+    return -1;
+  }
+  *element = queue->array[(queue->head + offset) % queue->size];
+  return 0;
+}

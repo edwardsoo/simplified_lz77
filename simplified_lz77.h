@@ -67,4 +67,5 @@ void queue_destroy (queue_t **queue_ptr);
 uint8_t* queue_sub_array (queue_t *queue, int offset, int length);
 void queue_add (queue_t* queue, uint8_t byte);
 int queue_pop (queue_t *queue, uint8_t *element);
+int queue_get (queue_t *queue, int offset, uint8_t *element);
 #endif

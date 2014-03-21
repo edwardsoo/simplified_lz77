@@ -213,7 +213,7 @@ int write_4bits (bit_out_stream_t *stream, uint8_t value) {
     stream->buffer_byte |= value >> (stream->bit_pos - 4);
     fputc (stream->buffer_byte, stream->file);
     if (ferror (stream->file)) return -1;
-    stream->buffer_byte = value << 12;
+    stream->buffer_byte = value << (12 - stream->bit_pos);
     stream->bit_pos -= 4;
   } else {
     stream->buffer_byte |= value << (4 - stream->bit_pos);

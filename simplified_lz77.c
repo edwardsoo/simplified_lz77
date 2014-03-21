@@ -7,6 +7,44 @@
 
 #define WHERE() printf("%u\n", __LINE__)
 
+void test_compress_file (FILE *in, FILE *out) {
+  bit_out_stream_t *out_stream;
+  out_stream = bit_out_stream_new (out);
+
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'm');
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'a');
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'h');
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'i');
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, ' ');
+  write_1bit (out_stream, 1);
+  write_12bits (out_stream, 4);
+  write_4bits (out_stream, 4);
+
+  bit_out_stream_destroy (&out_stream);
+  fclose (in);
+}
+
+void test_compress_file_2 (FILE *in, FILE *out) {
+  bit_out_stream_t *out_stream;
+  out_stream = bit_out_stream_new (out);
+
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'a');
+  write_1bit (out_stream, 0);
+  write_8bits (out_stream, 'b');
+  write_1bit (out_stream, 1);
+  write_12bits (out_stream, 1);
+  write_4bits (out_stream, 0xF);
+
+  bit_out_stream_destroy (&out_stream);
+  fclose (in);
+}
+
 void print_uint4_bits (uint8_t value) {
   int mask = 0x8;
   int i;
@@ -99,7 +137,7 @@ void compress_file (FILE *in, FILE *out) {
 }
 
 void decompress_file (FILE *in, FILE *out) {
-  uint8_t op_bit, byte, *copy, i;
+  uint8_t op_bit, byte, length, *copy, i;
   uint16_t pointer;
   bit_in_stream_t *in_stream;
   queue_t *queue;
@@ -114,13 +152,23 @@ void decompress_file (FILE *in, FILE *out) {
       fputc (byte, out);
     } else {
       if (read_12bits (in_stream, &pointer) != 0) break;
-      if (read_4bits (in_stream, &byte) != 0) break;
-      copy = queue_sub_array (queue, queue->length - 1 - pointer, byte);
-      for (i = 0; i < byte; i++) {
-        queue_add (queue, copy[i]);
+      if (read_4bits (in_stream, &length) != 0) break;
+
+      // Check if the queue has buffered enough bytes to copy
+      if (length > pointer + 1) {
+        for (i = 0; i < length; i++) {
+          queue_get (queue, queue->length - 1 - pointer, &byte);
+          queue_add (queue, byte);
+          fputc (byte, out);
+        }
+      } else {
+        copy = queue_sub_array (queue, queue->length - 1 - pointer, length);
+        for (i = 0; i < length; i++) {
+          queue_add (queue, copy[i]);
+        }
+        fwrite (copy, 1, length, out);
+        free (copy);
       }
-      fwrite (copy, 1, byte, out);
-      free (copy);
     }
   }
 
