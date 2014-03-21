@@ -5,7 +5,9 @@
 #include <string.h>
 #include "prefix_tree.h"
 
-static const prefix_tree_t *zero_block[0x100] = {0};
+inline int min_int (int a, int b) {
+  return (a < b ? a : b);
+}
 
 prefix_tree_t *prefix_tree_new (
     uint8_t *prefix, int len, uint64_t key, uint8_t has_key
@@ -37,6 +39,7 @@ void prefix_tree_destroy (prefix_tree_t **tree_p) {
     }
   }
   free (tree->prefix);
+  free (tree);
   *tree_p = NULL;
 }
 
@@ -89,9 +92,88 @@ void prefix_tree_insert (
   }
 }
 
-inline int min_int (int a, int b) {
-  return (a < b ? a : b);
+int prefix_tree_lookup (
+    prefix_tree_t *tree, uint8_t *prefix, int len, uint64_t *key
+    ) {
+  int matched = num_prefix_match (tree->prefix, prefix, tree->prefix_len, len);
+
+  if (tree->prefix_len == matched && matched == len) {
+    *key = tree->key;
+    return 0;
+  } else if (len > matched && tree->child[prefix[matched]]) {
+    return prefix_tree_lookup (tree->child[prefix[matched]], prefix + matched,
+        len - matched, key);
+  } else {
+    return -1;
+  }
 }
+
+void merge_with_only_child (prefix_tree_t **tree_p) {
+  int i;
+  uint8_t *ptr;
+  prefix_tree_t *tree, *child;
+  tree = *tree_p;
+
+  for (i = 0; i < 0x100; i++) {
+    if (tree->child[i]) {
+      child = tree->child[i];
+      ptr = child->prefix;
+      child->prefix = malloc (
+          sizeof(uint8_t) * (tree->prefix_len + child->prefix_len));
+      memcpy (child->prefix, tree->prefix, tree->prefix_len);
+      memcpy (child->prefix + tree->prefix_len, ptr, child->prefix_len);
+      child->prefix_len += tree->prefix_len;
+      *tree_p = child;
+      free (tree->prefix);
+      free (tree);
+      tree = NULL;
+      break;
+    }
+  }
+}
+
+int prefix_tree_delete (
+    prefix_tree_t **tree_p, uint8_t *prefix, int len, int (*fn(void*)), void* arg
+    ) {
+  int matched, rc;
+  prefix_tree_t *tree;
+  tree = *tree_p;
+
+  if (!tree) {
+    return -1;
+  } else {
+    matched = num_prefix_match (tree->prefix, prefix, tree->prefix_len, len);
+    if (tree->prefix_len == matched && matched == len) {
+      if (tree->has_key) {
+        if (tree->num_child > 1) {
+          tree->has_key = 0;
+        } else if (tree->num_child == 0) {
+          prefix_tree_destroy (tree_p);
+        } else {
+          merge_with_only_child (tree_p);
+        }
+      }
+      return 0;
+
+    } else if (len > matched && tree->child[prefix[matched]]) {
+      rc = prefix_tree_delete (tree->child + prefix[matched], prefix + matched,
+          len - matched, fn, arg);
+      if (rc == 0) {
+        if (tree->child[prefix[matched]] == NULL) {
+          tree->num_child -= 1;
+        }
+        if (!tree->has_key && tree->num_child == 1) {
+          merge_with_only_child (tree_p);
+        }
+      }
+      return rc;
+
+    } else {
+      return -1;
+    }
+  }
+}
+
 
 /* Returns the number of matching bytes in 2 prefix arrays
  */
