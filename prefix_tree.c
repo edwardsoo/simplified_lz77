@@ -54,17 +54,29 @@ void prefix_tree_insert (
     *tree_p = prefix_tree_new (key, len, value, 1);
 
   } else {
-    if (tree->key_len == 0) { // At root
-      if (!tree->child[key[0]]) {
-        tree->num_child += 1;
+    if (tree->key_len == 0) { // Root's key is empty
+      assert (tree->num_child != 1);
+      if (tree->num_child == 0) { // Empty tree
+        prefix_tree_destroy (&tree);
+        *tree_p = prefix_tree_new (key, len, value, 1);
+
+      } else { // Non-empty tree with empty root
+        prefix_tree_insert (tree->child + key[0], key, len, value);
       }
-      prefix_tree_insert (tree->child + key[0], key, len, value);
 
     } else {
       matched = num_prefix_match (tree->key, key, tree->key_len, len);
-      assert (matched > 0);
 
-      if (tree->key_len < len && matched == tree->key_len) {
+      if (matched == 0) {
+        // Root's key not empty and new key has no prefix match
+        new = prefix_tree_new (NULL, 0, 0, 0);
+        *tree_p = new;
+        
+        new->child[tree->key[0]] = tree;
+        prefix_tree_insert (tree->child + key[0], key, len, value); 
+        new->num_child = 2;
+
+      } else if (tree->key_len < len && matched == tree->key_len) {
         // the tree's key is a subarray of the new key
         if (!tree->child[key[0]]) {
           tree->num_child += 1;

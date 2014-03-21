@@ -124,7 +124,10 @@ void test_prefix_tree_delete () {
   prefix_tree_insert (&tree, (uint8_t*) "ab", 2, 2);
   prefix_tree_insert (&tree, (uint8_t*) "abd", 3, 3);
   prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 4);
+  print_tree_inorder (tree, 0);
   prefix_tree_delete (&tree, (uint8_t*) "a", 1, NULL, NULL);
+  print_tree_inorder (tree, 0);
+  prefix_tree_insert (&tree, (uint8_t*) "efg", 3, 1);
   print_tree_inorder (tree, 0);
   prefix_tree_delete (&tree, (uint8_t*) "ab", 2, NULL, NULL);
   print_tree_inorder (tree, 0);
@@ -207,11 +210,11 @@ void print_12bits(FILE *in) {
 }
 
 int main (int argc, char* argv[]) {
-  test_prefix_tree_1 ();
-  test_prefix_tree_2 ();
-  test_prefix_tree_3 ();
-  test_prefix_tree_4 ();
-  test_prefix_tree_5 ();
+  // test_prefix_tree_1 ();
+  // test_prefix_tree_2 ();
+  // test_prefix_tree_3 ();
+  // test_prefix_tree_4 ();
+  // test_prefix_tree_5 ();
   test_prefix_tree_delete ();
   return 0;
 }
