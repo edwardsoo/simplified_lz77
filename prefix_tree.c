@@ -54,7 +54,10 @@ void prefix_tree_insert (
     *tree_p = prefix_tree_new (prefix, len, key, 1);
 
   } else {
-    if (tree->prefix_len == 0) {
+    if (tree->prefix_len == 0) { // At root
+      if (!tree->child[prefix[0]]) {
+        tree->num_child += 1;
+      }
       prefix_tree_insert (tree->child + prefix[0], prefix, len, key);
 
     } else {
@@ -62,22 +65,30 @@ void prefix_tree_insert (
       assert (matched > 0);
 
       if (tree->prefix_len < len && matched == tree->prefix_len) {
+        // the tree's prefix is a subarray of the new prefix
+        if (!tree->child[prefix[0]]) {
+          tree->num_child += 1;
+        }
         prefix_tree_insert (tree->child + prefix[matched],
             prefix + matched, len - matched, key);
 
       } else if (tree->prefix_len > len && matched == len) {
+        // the new prefix is a subarray of the tree's prefix
         new = prefix_tree_new (prefix, len, key, 1);
         *tree_p = new;
         
         new->child[tree->prefix[matched]] = tree;
+        new->num_child = 1;
         memmove (tree->prefix, tree->prefix + matched, tree->prefix_len - matched);
         tree->prefix_len -= matched;
 
       } else if (tree->prefix_len == len && matched == len) {
+        // exact prefix match
         tree->key = key;
         tree->has_key = 1;
 
       } else {
+        // no subarray relationship
         new = prefix_tree_new (prefix, matched, 0, 0);
         *tree_p = new;
 
@@ -87,6 +98,7 @@ void prefix_tree_insert (
 
         new->child[prefix[matched]] = prefix_tree_new (prefix + matched,
             len - matched, key, 1);
+        new->num_child = 2;
       }
     }
   }
