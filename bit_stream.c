@@ -105,11 +105,17 @@ int read_8bits (bit_in_stream_t *stream, uint8_t *result) {
   if (stream->file_size < stream->read + 1) {
     return -1;
   }
-  value = (stream->last_byte << stream->bit_pos);
+
   c = fgetc (stream->file);
-  value |= (c >> (8 - stream->bit_pos));
-  stream->last_byte = c;
   stream->read += 1;
+
+  if (stream->bit_pos) {
+    value = (stream->last_byte << stream->bit_pos);
+    value |= (c >> (8 - stream->bit_pos));
+    stream->last_byte = c;
+  } else {
+    value = c;
+  }
 
   *result = (value & 0xFF);
   return 0;
