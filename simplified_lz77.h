@@ -1,10 +1,10 @@
 #ifndef SIMPLIFIED_LZ77_H
 #define SIMPLIFIED_LZ77_H
 
-/* A structure to help read bit-level contents from a file
+/* A structure to help read from a file at bits level
  * The structure takes ownership of the opened file when created
  */
-typedef struct bit_stream {
+typedef struct bit_in_stream {
   FILE *file;
 
   /* The position of the next bit to read in a byte:
@@ -18,15 +18,41 @@ typedef struct bit_stream {
    */
   uint64_t file_size;
   uint64_t read;
-} bit_stream_t;
+} bit_in_stream_t;
 
-bit_stream_t* bit_stream_new (FILE *file);
-void bit_stream_destroy (bit_stream_t **stream_ptr);
-int read_1bit (bit_stream_t *stream, uint8_t *result);
-int read_4bits (bit_stream_t *stream, uint8_t *result);
-int read_8bits (bit_stream_t *stream, uint8_t *result);
-int read_12bits (bit_stream_t *stream, uint16_t *result);
+bit_in_stream_t* bit_in_stream_new (FILE *file);
+void bit_in_stream_destroy (bit_in_stream_t **stream_ptr);
+int read_1bit (bit_in_stream_t *stream, uint8_t *result);
+int read_4bits (bit_in_stream_t *stream, uint8_t *result);
+int read_8bits (bit_in_stream_t *stream, uint8_t *result);
+int read_12bits (bit_in_stream_t *stream, uint16_t *result);
 
+
+/* A structure to help write to a file at bits level
+ * The structure takes ownership of the opened file when created
+ */
+typedef struct bit_out_stream {
+  FILE *file;
+
+  /* The position of the next bit to write in buffer_byte:
+   * If it's a 0 then buffer_byte does not contain any buffered bit.
+   * Otherwise the next value written will overwrite buffer_byte
+   * starting at the bit_pos-th MSG of buffer_byte.
+   */
+  uint8_t bit_pos;
+  /* Store bits to be written.
+   * It is written to file when all 8 bits are filled
+   */
+  uint8_t buffer_byte;
+
+} bit_out_stream_t;
+
+bit_out_stream_t* bit_out_stream_new (FILE* file);
+void bit_out_stream_destroy (bit_out_stream_t **stream_ptr);
+int write_1bit (bit_out_stream_t *stream, uint8_t value);
+int write_4bits (bit_out_stream_t *stream, uint8_t value);
+int write_8bits (bit_out_stream_t *stream, uint8_t value);
+int write_12bits (bit_out_stream_t *stream, uint16_t value);
 
 
 /* A fixed size queue of bytes:
@@ -41,5 +67,4 @@ void queue_destroy (queue_t **queue_ptr);
 uint8_t* queue_sub_array (queue_t *queue, int offset, int length);
 void queue_add (queue_t* queue, uint8_t byte);
 int queue_pop (queue_t *queue, uint8_t *element);
-
 #endif

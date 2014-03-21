@@ -4,15 +4,15 @@
 #include <sys/stat.h>
 #include "simplified_lz77.h"
 
-bit_stream_t* bit_stream_new (FILE *file) {
+bit_in_stream_t* bit_in_stream_new (FILE *file) {
   struct stat file_stat;
-  bit_stream_t* stream;
+  bit_in_stream_t* stream;
 
   if (fstat (fileno (file), &file_stat) != 0) {
     return NULL;
   }
 
-  stream = malloc (sizeof (bit_stream_t));
+  stream = malloc (sizeof (bit_in_stream_t));
   if (stream) {
     stream->file = file;
     stream->file_size = file_stat.st_size;
@@ -24,8 +24,8 @@ bit_stream_t* bit_stream_new (FILE *file) {
   return stream;
 }
 
-void bit_stream_destroy (bit_stream_t **stream_ptr) {
-  bit_stream_t *stream = *stream_ptr;
+void bit_in_stream_destroy (bit_in_stream_t **stream_ptr) {
+  bit_in_stream_t *stream = *stream_ptr;
   fclose (stream->file);
   free (stream);
   *stream_ptr = NULL;
@@ -37,7 +37,7 @@ void bit_stream_destroy (bit_stream_t **stream_ptr) {
  * Return 0 for success and -1 for failure.
  * Value of result is not modified if operation failed.
  */
-int read_1bit (bit_stream_t *stream, uint8_t *result) {
+int read_1bit (bit_in_stream_t *stream, uint8_t *result) {
   uint8_t value;
   int c;
 
@@ -61,7 +61,7 @@ int read_1bit (bit_stream_t *stream, uint8_t *result) {
   return 0;
 }
 
-int read_4bits (bit_stream_t *stream, uint8_t *result) {
+int read_4bits (bit_in_stream_t *stream, uint8_t *result) {
   uint8_t value;
   int c;
 
@@ -98,7 +98,7 @@ int read_4bits (bit_stream_t *stream, uint8_t *result) {
   return 0;
 }
 
-int read_8bits (bit_stream_t *stream, uint8_t *result) {
+int read_8bits (bit_in_stream_t *stream, uint8_t *result) {
   uint8_t value;
   int c;
 
@@ -115,7 +115,7 @@ int read_8bits (bit_stream_t *stream, uint8_t *result) {
   return 0;
 }
 
-int read_12bits (bit_stream_t *stream, uint16_t *result) {
+int read_12bits (bit_in_stream_t *stream, uint16_t *result) {
   uint16_t value;
   int c;
 
@@ -160,5 +160,101 @@ int read_12bits (bit_stream_t *stream, uint16_t *result) {
   }
 
   *result = (value & 0x0000FFF);
+  return 0;
+}
+
+
+bit_out_stream_t* bit_out_stream_new (FILE* file) {
+  bit_out_stream_t* stream;
+
+  stream = malloc (sizeof (bit_out_stream_t));
+  if (stream) {
+    stream->file = file;
+    stream->bit_pos = 0;
+    stream->buffer_byte = 0;
+    fseek (file, 0, SEEK_SET);
+  }
+  return stream;
+
+}
+
+void bit_out_stream_destroy (bit_out_stream_t **stream_ptr) {
+  bit_out_stream_t *stream = *stream_ptr;
+  if (stream->bit_pos) {
+    fputc (stream->buffer_byte, stream->file);
+  }
+  fclose (stream->file);
+  free (stream);
+  *stream_ptr = NULL;
+}
+
+int write_1bit (bit_out_stream_t *stream, uint8_t value) {
+  value &= 0x1;
+  stream->buffer_byte |= value << (7 - stream->bit_pos);
+  stream->bit_pos += 1;
+  if (stream->bit_pos == 8) {
+    fputc (stream->buffer_byte, stream->file);
+    if (ferror (stream->file)) return -1;
+    stream->bit_pos = 0;
+    stream->buffer_byte = 0;
+  }
+  return 0;
+}
+
+int write_4bits (bit_out_stream_t *stream, uint8_t value) {
+  value &= 0xF;
+  if (stream->bit_pos > 4) {
+    stream->buffer_byte |= value >> (stream->bit_pos - 4);
+    fputc (stream->buffer_byte, stream->file);
+    if (ferror (stream->file)) return -1;
+    stream->buffer_byte = value << 12;
+    stream->bit_pos -= 4;
+  } else {
+    stream->buffer_byte |= value << (4 - stream->bit_pos);
+    stream->bit_pos += 4;
+    if (stream->bit_pos == 8) {
+      fputc (stream->buffer_byte, stream->file);
+      if (ferror (stream->file)) return -1;
+      stream->bit_pos = 0;
+      stream->buffer_byte = 0;
+    }
+  }
+  return 0;
+}
+
+int write_8bits (bit_out_stream_t *stream, uint8_t value) {
+  if (stream->bit_pos == 0) {
+    fputc (value, stream->file);
+    if (ferror (stream->file)) return -1;
+  } else {
+    stream->buffer_byte |= (value >> stream->bit_pos);
+    fputc (stream->buffer_byte, stream->file);
+    if (ferror (stream->file)) return -1;
+    stream->buffer_byte = value << (8 - stream->bit_pos);
+  }
+  return 0;
+}
+
+int write_12bits (bit_out_stream_t *stream, uint16_t value) {
+  uint8_t c;
+  value &= 0xFFF;
+
+  if (stream->bit_pos > 4) {
+    stream->buffer_byte |= value >> (4 + stream->bit_pos);
+    fputc (stream->buffer_byte, stream->file);
+    if (ferror (stream->file)) return -1;
+    c = value >> (stream->bit_pos - 4);
+    fputc (c, stream->file);
+    if (ferror (stream->file)) return -1;
+    stream->buffer_byte = value << (12 - stream->bit_pos);
+    stream->bit_pos -= 4;
+  } else {
+    stream->buffer_byte |= value >> (4 + stream->bit_pos);
+    fputc (stream->buffer_byte, stream->file);
+    if (ferror (stream->file)) return -1;
+    c = value << (4 - stream->bit_pos);
+    stream->buffer_byte = c;
+    stream->bit_pos += 4;
+  }
   return 0;
 }
