@@ -42,6 +42,19 @@ void print_tree_inorder (prefix_tree_t *tree, int depth) {
   }
 }
 
+void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
+  int i;
+  if (tree) {
+    if (tree->has_value) {
+      assert (tree->key);
+      assert (tree->key_len);
+    }
+    for (i = 0; i < 0x100; i++) {
+      traverse_tree_inorder (tree->child[i], depth + 1);
+    }
+  }
+}
+
 int value_less_than (prefix_tree_t *tree, void *arg) {
   uint64_t *value = arg;
   return tree->value < *value;
@@ -64,8 +77,25 @@ void insert_queue_head_prefixes (
   }
 }
 
+void delete_old_prefixes (
+    prefix_tree_t **tree_p, queue_t *queue, uint64_t value
+    ) {
+  int i;
+  uint8_t *key;
+
+  // Prefix lengths in [2,15]
+  for (i = 2; i < 0x10; i++) {
+    key = queue_sub_array (queue, 0, i);
+    prefix_tree_delete (tree_p, key, i, value_less_than, &value);
+    // printf ("delete [");
+    // print_key_chars (key, i);
+    // printf ("] rc=%d\n", rc);
+    free (key);
+    }
+}
+
 void compress_file (FILE *in, FILE *out) {
-  int c, i, matched;
+  int c, matched, skip;
   uint8_t byte, *key;
   uint16_t pointer;
   uint64_t read, compressed, value;
@@ -89,7 +119,7 @@ void compress_file (FILE *in, FILE *out) {
       key = queue_sub_array (pending, 0, pending->length);
       matched = prefix_tree_longest_match (tree, key, pending->length, &value);
 
-      // if (matched) {
+     // if (matched) {
       //   printf ("LPM of [");
       //   print_key_chars (key, pending->length);
       //   printf ("](%d) is [", pending->length);
@@ -104,27 +134,26 @@ void compress_file (FILE *in, FILE *out) {
       queue_pop (pending, &byte);
       // printf ("processing '%c': ", byte);
 
-      // Write compressed data
-      if (matched && compressed >= value) {
-        assert (matched >= 2 && matched <= 15);
-        pointer = compressed - value;
-        if (write_1bit (out_stream, 1) != 0) break;
-        if (write_12bits (out_stream, pointer) != 0) break;
-        if (write_4bits (out_stream, matched) != 0) break;
-        // printf ("<1,%d,%d>\n", pointer, matched);
-
-        // pipe bytes from queue pending to queue pointable
-        for (i = 1; i < matched; i++) {
-          queue_add (pointable, byte);
-          compressed += 1;
-          insert_queue_head_prefixes (&tree, pending, compressed + 1);
-          queue_pop (pending, &byte);
-        }
+      if (skip > 0) {
+        // This byte is already compressed
+        skip -= 1;
 
       } else {
-        if (write_1bit (out_stream, 0) != 0) break;
-        if (write_8bits (out_stream, byte) != 0) break;
-        // printf ("<0,'%c'>\n", byte);
+        // Write compressed data
+        if (matched && compressed >= value) {
+          assert (matched >= 2 && matched <= 15);
+          pointer = compressed - value;
+          if (write_1bit (out_stream, 1) != 0) break;
+          if (write_12bits (out_stream, pointer) != 0) break;
+          if (write_4bits (out_stream, matched) != 0) break;
+          // printf ("<1,%d,%d>\n", pointer, matched);
+          skip = matched - 1;
+
+        } else {
+          if (write_1bit (out_stream, 0) != 0) break;
+          if (write_8bits (out_stream, byte) != 0) break;
+          // printf ("<0,'%c'>\n", byte);
+        }
       }
       compressed += 1;
 
@@ -132,14 +161,7 @@ void compress_file (FILE *in, FILE *out) {
         // Remove all subarrays with lengths between 2 and 15 begining with
         // the oldest byte in queue pointable and has a value less than 
         // [compressed - PTR_SIZE] from the prefix tree
-
-        value = compressed - PTR_SIZE;
-        // Prefix lengths in [2,15]
-        for (i = 2; i < 0x10; i++) {
-          key = queue_sub_array (pointable, 0, i);
-          prefix_tree_delete (&tree, key, i, value_less_than, &value);
-          free (key);
-        }
+        delete_old_prefixes (&tree, pointable, compressed - PTR_SIZE);
       }
       queue_add (pointable, byte);
     }

@@ -24,7 +24,7 @@ prefix_tree_t *prefix_tree_new (
     tree->value = value;
     tree->has_value = has_value;
     tree->num_child = 0;
-    memset (tree->child, 0, 0x100);
+    memset (tree->child, 0, CHILD_SIZE);
   }
   return tree;
 }
@@ -33,7 +33,7 @@ void prefix_tree_destroy (prefix_tree_t **tree_p) {
   int i;
 
   prefix_tree_t *tree = *tree_p;
-  for (i = 0; i < 0x100; i++) {
+  for (i = 0; i < CHILD_SIZE; i++) {
     if (tree->child[i]) {
       prefix_tree_destroy (tree->child + i);
     }
@@ -62,6 +62,8 @@ void prefix_tree_insert (
 
       } else { // Non-empty tree with empty root
         prefix_tree_insert (tree->child + key[0], key, len, value);
+        assert (tree->num_child > 1);
+        tree->num_child += 1;
       }
 
     } else {
@@ -92,7 +94,9 @@ void prefix_tree_insert (
         new->child[tree->key[matched]] = tree;
         new->num_child = 1;
         memmove (tree->key, tree->key + matched, tree->key_len - matched);
+        tree->key = realloc (tree->key, tree->key_len - matched);
         tree->key_len -= matched;
+        assert (tree->key_len > 0 && tree->key_len < 0xF);
 
       } else if (tree->key_len == len && matched == len) {
         // exact key match
@@ -113,26 +117,6 @@ void prefix_tree_insert (
         new->num_child = 2;
       }
     }
-  }
-}
-
-int prefix_tree_lookup (
-    prefix_tree_t *tree, uint8_t *key, int len, uint64_t *value
-    ) {
-  int matched = num_prefix_match (tree->key, key, tree->key_len, len);
-
-  if (tree->key_len == matched && matched == len && tree->has_value) {
-    *value = tree->value;
-    return 0;
-
-  } else if (
-      len > matched && matched == tree->key_len && tree->child[key[matched]]
-      ) {
-    return prefix_tree_lookup (tree->child[key[matched]], key + matched,
-        len - matched, value);
-
-  } else {
-    return -1;
   }
 }
 
@@ -176,22 +160,28 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
   uint8_t *ptr;
   prefix_tree_t *tree, *child;
   tree = *tree_p;
+  child = NULL;
 
-  for (i = 0; i < 0x100; i++) {
+  for (i = 0; i < CHILD_SIZE; i++) {
     if (tree->child[i]) {
       child = tree->child[i];
-      ptr = child->key;
-      child->key = malloc (
-          sizeof(uint8_t) * (tree->key_len + child->key_len));
-      memcpy (child->key, tree->key, tree->key_len);
-      memcpy (child->key + tree->key_len, ptr, child->key_len);
-      child->key_len += tree->key_len;
-      *tree_p = child;
-      free (ptr);
-      prefix_tree_destroy (&tree);
-      return;
+      break;
     }
   }
+
+  assert (child != NULL);
+  for (i++; i < CHILD_SIZE; i++) {
+    assert (!tree->child[i]);
+  }
+
+  ptr = child->key;
+  child->key = malloc (sizeof (uint8_t) * (tree->key_len + child->key_len));
+  memcpy (child->key, tree->key, tree->key_len);
+  memcpy (child->key + tree->key_len, ptr, child->key_len);
+  child->key_len += tree->key_len;
+  free (ptr);
+  prefix_tree_destroy (tree_p);
+  *tree_p = child;
 }
 
 int prefix_tree_delete (
@@ -203,37 +193,60 @@ int prefix_tree_delete (
   tree = *tree_p;
 
   if (!tree) {
+    WHERE();
     return -1;
-  } else {
-    matched = num_prefix_match (tree->key, key, tree->key_len, len);
-    if (
-        tree->key_len == matched && matched == len && (!fn || fn (tree, arg))
-      ) {
-      if (tree->has_value) {
-        if (tree->num_child > 1) {
-          tree->has_value = 0;
-        } else if (tree->num_child == 0) {
-          prefix_tree_destroy (tree_p);
-        } else {
-          merge_with_only_child (tree_p);
-        }
-      }
-      return 0;
 
+  } else {
+    assert (tree > 0x1000);
+    matched = num_prefix_match (tree->key, key, tree->key_len, len);
+
+    if (tree->key_len == matched && matched == len) { // keys match
+      if (tree->has_value && (!fn || fn (tree, arg))) {
+        if (tree->num_child > 1) {
+          // Prefix at least 2 sub-trees, turn into internal node
+          WHERE();
+          tree->has_value = 0;
+
+        } else if (tree->num_child == 0) {
+          WHERE();
+          prefix_tree_destroy (tree_p);
+
+        } else {
+          // Only has 1 child, merge node & key with child's
+          WHERE();
+          merge_with_only_child (tree_p);
+          assert (*tree_p);
+        }
+        WHERE();
+        return 0;
+
+      } else { // No value or value fails evaluation function
+        WHERE();
+        return -1;
+      }
     } else if (len > matched && tree->child[key[matched]]) {
+      // Try to delete in sub-tree
       rc = prefix_tree_delete (tree->child + key[matched], key + matched,
           len - matched, fn, arg);
+
       if (rc == 0) {
         if (tree->child[key[matched]] == NULL) {
+          // Sub-tree was pruned
+          WHERE();
           tree->num_child -= 1;
         }
         if (!tree->has_value && tree->num_child == 1) {
+          WHERE();
           merge_with_only_child (tree_p);
+          assert (*tree_p);
         }
+      } else {
+        WHERE();
       }
       return rc;
 
     } else {
+      WHERE();
       return -1;
     }
   }
@@ -243,7 +256,9 @@ int prefix_tree_delete (
 /* Returns the number of matching bytes in 2 key arrays
  */
 int num_prefix_match (uint8_t *key1, uint8_t *key2, int len1, int len2) {
-  int i;
-  for (i = 0; i < min_int (len1, len2) && key1[i] == key2[i]; i++);
+  int i, min;
+  min = min_int (len1, len2);
+  if (min == 0) return 0;
+  for (i = 0; i < min && key1[i] == key2[i]; i++);
   return i;
 }
