@@ -5,8 +5,6 @@
 #include <string.h>
 #include "prefix_tree.h"
 
-#define WHERE() printf("%d\n", __LINE__)
-
 inline int min_int (int a, int b) {
   return (a < b ? a : b);
 }
@@ -75,7 +73,7 @@ void prefix_tree_insert (
         *tree_p = new;
         
         new->child[tree->key[0]] = tree;
-        prefix_tree_insert (tree->child + key[0], key, len, value); 
+        prefix_tree_insert (new->child + key[0], key, len, value); 
         new->num_child = 2;
 
       } else if (tree->key_len < len && matched == tree->key_len) {
@@ -144,9 +142,12 @@ int prefix_tree_longest_match (
   int matched, rc;
   matched = num_prefix_match (tree->key, key, tree->key_len, len);
 
-  if (tree->key_len == matched && matched == len && tree->has_value) {
+  if (
+      tree->key_len == matched && tree->has_value && 
+      (len == matched || !tree->child[key[matched]])
+     ) {
     *value = tree->value;
-    return len;
+    return matched;
 
   } else if (
       len > matched && matched == tree->key_len && tree->child[key[matched]]

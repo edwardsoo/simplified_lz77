@@ -9,9 +9,6 @@
 #include "queue.h"
 #include "prefix_tree.h"
 
-#define PTR_SIZE 0x1000
-#define WHERE() printf("%d\n", __LINE__)
-
 void print_key_bytes (uint8_t *key, int len) {
   int i;
   for (i = 0; i < len; i++) {
@@ -22,21 +19,23 @@ void print_key_bytes (uint8_t *key, int len) {
 void print_key_chars (uint8_t *key, int len) {
   int i;
   for (i = 0; i < len; i++) {
-    printf ("%c", key[i]);
+    if (key[i] != '\n') printf ("%c", key[i]);
+    else printf ("\\n");
   }
 }
 
 void print_tree_inorder (prefix_tree_t *tree, int depth) {
   int i;
   if (tree) {
-    printf ("%*sprefix = [", depth, "");
+    printf ("%*sK=[", depth, "");
     print_key_chars (tree->key, tree->key_len);
+    // print_key_bytes (tree->key, tree->key_len);
     if (tree->has_value) {
-      printf("] value = %ld", tree->value);
+      printf("] V=%ld", tree->value);
     } else {
-      printf("] value = NULL");
+      printf("] V=NULL");
     }
-    printf (" depth %d\n", depth);
+    printf (" D=%d\n", depth);
     for (i = 0; i < 0x100; i++) {
       print_tree_inorder (tree->child[i], depth + 1);
     }
@@ -56,10 +55,13 @@ void insert_queue_head_prefixes (
 
   for (i = queue->length; i > 1; i--) {
     key = queue_sub_array (queue, 0, i);
+    // print_tree_inorder (*tree_p, 0);
+    // printf ("insert key [");
+    // print_key_bytes (key, i);
+    // printf ("]\n");
     prefix_tree_insert (tree_p, key, i, value);
     free (key);
   }
-  print_tree_inorder (tree);
 }
 
 void compress_file (FILE *in, FILE *out) {
@@ -81,30 +83,26 @@ void compress_file (FILE *in, FILE *out) {
   compressed = 0;
 
   while ((c = fgetc (in)) != EOF || pending->length) {
-
-    // printf ("compressed %ld bytes, %d pending bytes\n", compressed, pending->length);
-    // print_tree_inorder (tree, 0);
-
     // Compress a byte if queue pending is full or finished reading from file
     if (pending->length == pending->size || c == EOF) {
       // Find the longest prefix match
       key = queue_sub_array (pending, 0, pending->length);
       matched = prefix_tree_longest_match (tree, key, pending->length, &value);
 
-      if (matched) {
-        // printf ("longest match with %d [", pending->length);
-        //print_key_chars (key, pending->length);
-        //printf ("] found match = [");
-        //print_key_chars (key, matched);
-        //printf ("] value = %ld\n", value);
-      }
+      // if (matched) {
+      //   printf ("LPM of [");
+      //   print_key_chars (key, pending->length);
+      //   printf ("](%d) is [", pending->length);
+      //   print_key_chars (key, matched);
+      //   printf ("] V=%ld\n", value);
+      // }
       free (key);
 
       // Insert subarrays starting at this byte into prefix tree
       insert_queue_head_prefixes (&tree, pending, compressed + 1);
 
       queue_pop (pending, &byte);
-      printf ("processing '%c': ", byte);
+      // printf ("processing '%c': ", byte);
 
       // Write compressed data
       if (matched && compressed >= value) {
@@ -113,7 +111,7 @@ void compress_file (FILE *in, FILE *out) {
         if (write_1bit (out_stream, 1) != 0) break;
         if (write_12bits (out_stream, pointer) != 0) break;
         if (write_4bits (out_stream, matched) != 0) break;
-        printf ("<1,%d,%d>\n", pointer, matched);
+        // printf ("<1,%d,%d>\n", pointer, matched);
 
         // pipe bytes from queue pending to queue pointable
         for (i = 1; i < matched; i++) {
@@ -126,7 +124,7 @@ void compress_file (FILE *in, FILE *out) {
       } else {
         if (write_1bit (out_stream, 0) != 0) break;
         if (write_8bits (out_stream, byte) != 0) break;
-        printf ("<0,'%c'>\n", byte);
+        // printf ("<0,'%c'>\n", byte);
       }
       compressed += 1;
 

@@ -29,4 +29,6 @@ int prefix_tree_delete (
     );
 int num_prefix_match (uint8_t *key1, uint8_t *key2, int len1, int len2);
 
+#define WHERE() printf("%d\n",__LINE__)
+
 #endif
