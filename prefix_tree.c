@@ -5,6 +5,8 @@
 #include <string.h>
 #include "prefix_tree.h"
 
+#define WHERE() printf("%d\n", __LINE__)
+
 inline int min_int (int a, int b) {
   return (a < b ? a : b);
 }
@@ -57,7 +59,7 @@ void prefix_tree_insert (
     if (tree->key_len == 0) { // Root's key is empty
       assert (tree->num_child != 1);
       if (tree->num_child == 0) { // Empty tree
-        prefix_tree_destroy (&tree);
+        prefix_tree_destroy (tree_p);
         *tree_p = prefix_tree_new (key, len, value, 1);
 
       } else { // Non-empty tree with empty root
@@ -121,14 +123,50 @@ int prefix_tree_lookup (
     ) {
   int matched = num_prefix_match (tree->key, key, tree->key_len, len);
 
-  if (tree->key_len == matched && matched == len) {
+  if (tree->key_len == matched && matched == len && tree->has_value) {
     *value = tree->value;
     return 0;
-  } else if (len > matched && tree->child[key[matched]]) {
+
+  } else if (
+      len > matched && matched == tree->key_len && tree->child[key[matched]]
+      ) {
     return prefix_tree_lookup (tree->child[key[matched]], key + matched,
         len - matched, value);
+
   } else {
     return -1;
+  }
+}
+
+int prefix_tree_longest_match (
+    prefix_tree_t *tree, uint8_t *key, int len, uint64_t *value
+    ) {
+  int matched, rc;
+  matched = num_prefix_match (tree->key, key, tree->key_len, len);
+
+  if (tree->key_len == matched && matched == len && tree->has_value) {
+    *value = tree->value;
+    return len;
+
+  } else if (
+      len > matched && matched == tree->key_len && tree->child[key[matched]]
+      ) {
+    rc = prefix_tree_longest_match (tree->child[key[matched]], key + matched,
+       len - matched, value);
+
+    if (rc > 0) {
+      return rc + matched;
+
+    } else if (tree->has_value) {
+      *value = tree->value;
+      return matched;
+
+    } else {
+      return 0;
+    }
+
+  } else {
+    return 0;
   }
 }
 
@@ -148,16 +186,16 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
       memcpy (child->key + tree->key_len, ptr, child->key_len);
       child->key_len += tree->key_len;
       *tree_p = child;
-      free (tree->key);
-      free (tree);
-      tree = NULL;
-      break;
+      free (ptr);
+      prefix_tree_destroy (&tree);
+      return;
     }
   }
 }
 
 int prefix_tree_delete (
-    prefix_tree_t **tree_p, uint8_t *key, int len, int (*fn(void*)), void* arg
+    prefix_tree_t **tree_p, uint8_t *key, int len,
+    int (*fn)(prefix_tree_t*, void*), void* arg
     ) {
   int matched, rc;
   prefix_tree_t *tree;
@@ -167,7 +205,9 @@ int prefix_tree_delete (
     return -1;
   } else {
     matched = num_prefix_match (tree->key, key, tree->key_len, len);
-    if (tree->key_len == matched && matched == len) {
+    if (
+        tree->key_len == matched && matched == len && (!fn || fn (tree, arg))
+      ) {
       if (tree->has_value) {
         if (tree->num_child > 1) {
           tree->has_value = 0;

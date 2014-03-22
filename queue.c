@@ -69,7 +69,7 @@ int queue_pop (queue_t *queue, uint8_t *element) {
   }
   *element = queue->array[queue->head];
   queue->head = (queue->head + 1) % queue->size;
-  queue->size -= 1;
+  queue->length -= 1;
   return 0;
 }
 

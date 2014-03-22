@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include "bit_stream.h"
 
+#define WHERE() printf("%d\n", __LINE__)
 
 bit_in_stream_t* bit_in_stream_new (FILE *file) {
   struct stat file_stat;
@@ -92,7 +93,7 @@ int read_4bits (bit_in_stream_t *stream, uint8_t *result) {
   } else {
     // last_byte has at least 4 unused bits; do not need to read from stream
     value = (stream->last_byte >> (4 - stream->bit_pos));
-    stream->bit_pos += 4;
+    stream->bit_pos = (stream->bit_pos + 4) % 8;
   }
 
   *result = (value & 0xF);
