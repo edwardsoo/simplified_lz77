@@ -116,9 +116,9 @@ void compress_file (FILE *in, FILE *out) {
         // pipe bytes from queue pending to queue pointable
         for (i = 1; i < matched; i++) {
           queue_add (pointable, byte);
+          compressed += 1;
           insert_queue_head_prefixes (&tree, pending, compressed + 1);
           queue_pop (pending, &byte);
-          compressed += 1;
         }
 
       } else {
@@ -170,14 +170,14 @@ void decompress_file (FILE *in, FILE *out) {
   while (read_1bit (in_stream, &op_bit) == 0) {
     if (!op_bit) {
       if (read_8bits (in_stream, &byte) != 0) break;
-      printf ("<0,'%c'>\n", byte);
+      // printf ("<0,'%c'>\n", byte);
       queue_add (queue, byte);
       fputc (byte, out);
 
     } else {
       if (read_12bits (in_stream, &pointer) != 0) break;
       if (read_4bits (in_stream, &length) != 0) break;
-      printf ("<1,%d,%d>\n", pointer, length);
+      // printf ("<1,%d,%d>\n", pointer, length);
 
       // Check if the queue has buffered enough bytes to copy
       if (length > pointer + 1) {
@@ -188,6 +188,9 @@ void decompress_file (FILE *in, FILE *out) {
         }
       } else {
         copy = queue_sub_array (queue, queue->length - 1 - pointer, length);
+        // printf ("copy [");
+        // print_key_bytes (copy, length);
+        // printf ("]\n");
         for (i = 0; i < length; i++) {
           queue_add (queue, copy[i]);
         }
