@@ -69,17 +69,17 @@ it also add these bytes back to the buffer.
   Compressor implementations:
 ###############################################################################
 
-A prefix tree is used for pattern comparisons. Every time a byte is compressed, whether as a <0,VALUE> or <1,POINTER,LENGTH>,
-patterns with lengths 2 - 15 starting with that byte are inserted into the tree with value = [# of bytes compressed] for lookups later.
+A hash table is used for pattern comparisons. Every time a byte is compressed, whether as a <0,VALUE> or <1,POINTER,LENGTH>,
+patterns with lengths 2 - 15 starting with that byte are inserted into the hash table with value = [# of bytes compressed] for lookups later.
 
-2 Circular buffers are used during compression: one (PENDING) for building patterns to be inserted into the prefix tree,
+2 Circular buffers are used during compression: one (PENDING) for building patterns to be inserted into the prefix hash table,
 another (POINTABLE) is used for keeping track of patterns that are pointable by the next compression command.
 
 For each byte read from the file to be compressed, it is first added to PENDING.
 When PENDING is full, the 15 bytes long pattern starting at the oldest byte is looked up using longest prefix match.
 If a pattern with length greater than 2 is found, <1,POINTER,LENGTH> is written. Otherwise, <0,VALUE> is written.
-The byte popped is then added to the POINTABLE tree.
-To keep the prefix tree sparse, when the POINTABLE buffer is full,
+The byte popped is then added to the POINTABLE buffer.
+To keep the prefix hash table sparse, when the POINTABLE buffer is full,
 patterns of length 2 - 15 starting with the oldest byte are looked up and deleted if their value is no longer pointable.
 
 When every byte from the file to be compressed is read, remaining bytes in PENDING are processed in the same way until it is empty.
