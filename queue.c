@@ -44,10 +44,12 @@ uint8_t* queue_sub_array (queue_t *queue, int offset, int length) {
     copy_head = (queue->head + offset) % queue->size;
     first_copy_len = queue->size - copy_head;
     if (first_copy_len < length) {
-      memcpy (sub_array, queue->array + copy_head, first_copy_len);
-      memcpy (sub_array + first_copy_len, queue->array, length - first_copy_len);
+      memcpy (sub_array, queue->array + copy_head,
+          sizeof (uint8_t) * first_copy_len);
+      memcpy (sub_array + first_copy_len, queue->array,
+          sizeof (uint8_t) * (length - first_copy_len));
     } else {
-      memcpy (sub_array, queue->array + copy_head, length);
+      memcpy (sub_array, queue->array + copy_head, sizeof(uint8_t) * length);
     }
   }
   return sub_array;

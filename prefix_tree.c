@@ -20,11 +20,11 @@ prefix_tree_t *prefix_tree_new (
       tree->key = NULL;
     }
     tree->key_len = len;
-    memcpy (tree->key, key, len);
+    memcpy (tree->key, key, sizeof (uint8_t) * len);
     tree->value = value;
     tree->has_value = has_value;
     tree->num_child = 0;
-    memset (tree->child, 0, CHILD_SIZE);
+    memset (tree->child, 0, sizeof (prefix_tree_t *) * CHILD_SIZE);
   }
   return tree;
 }
@@ -95,7 +95,8 @@ void prefix_tree_insert (
         
         new->child[tree->key[matched]] = tree;
         new->num_child = 1;
-        memmove (tree->key, tree->key + matched, tree->key_len - matched);
+        memmove (tree->key, tree->key + matched, 
+            sizeof (uint8_t) * (tree->key_len - matched));
         tree->key_len -= matched;
         tree->key = realloc (tree->key, sizeof (uint8_t) * tree->key_len);
 
@@ -112,7 +113,8 @@ void prefix_tree_insert (
         *tree_p = new;
 
         new->child[tree->key[matched]] = tree;
-        memmove (tree->key, tree->key + matched, tree->key_len - matched);
+        memmove (tree->key, tree->key + matched,
+            sizeof (uint8_t) * (tree->key_len - matched));
         tree->key_len -= matched;
         tree->key = realloc (tree->key, sizeof (uint8_t) * tree->key_len);
 
@@ -180,8 +182,9 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
 
   child->key = realloc (child->key,
       sizeof (uint8_t) * (tree->key_len + child->key_len));
-  memmove (child->key + tree->key_len, child->key, child->key_len);
-  memmove (child->key, tree->key, tree->key_len);
+  memmove (child->key + tree->key_len, child->key,
+      sizeof (uint8_t) * child->key_len);
+  memmove (child->key, tree->key, tree->key_len * sizeof (uint8_t));
   child->key_len += tree->key_len;
   prefix_tree_destroy (tree_p);
   *tree_p = child;

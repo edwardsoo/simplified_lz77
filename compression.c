@@ -42,7 +42,7 @@ void print_tree_inorder (prefix_tree_t *tree, int depth) {
   }
 }
 
-int get_num_child (prefix_tree_t *tree) {
+int count_num_child (prefix_tree_t *tree) {
   int i, count = 0;
   for (i = 0; i < CHILD_SIZE; i++) {
     if (tree->child[i]) count++;
@@ -56,8 +56,10 @@ void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
     if (tree->has_value) {
       assert (tree->key);
       assert (tree->key_len);
+    } else {
+      assert (tree->num_child > 1);
     }
-    assert (tree->num_child == get_num_child (tree));
+    assert (tree->num_child == count_num_child (tree));
     for (i = 0; i < 0x100; i++) {
       traverse_tree_inorder (tree->child[i], depth + 1);
     }
@@ -77,43 +79,22 @@ void insert_queue_head_prefixes (
 
   for (i = queue->length; i > 1; i--) {
     key = queue_sub_array (queue, 0, i);
-    // print_tree_inorder (*tree_p, 0);
-    // printf ("insert key [");
-    // print_key_bytes (key, i);
-    // printf ("]\n");
     prefix_tree_insert (tree_p, key, i, value);
     free (key);
-
-    // traverse_tree_inorder (*tree_p, 0);
   }
 }
 
-void delete_old_prefixes (
+void delete_queue_head_prefixes (
     prefix_tree_t **tree_p, queue_t *queue, uint64_t value
     ) {
-  int i, rc;
+  int i;
   uint8_t *key;
-  uint64_t tmp;
 
   // Prefix lengths in [2,15]
   for (i = 2; i < 0x10; i++) {
     key = queue_sub_array (queue, 0, i);
-
-    rc = prefix_tree_longest_match (*tree_p, key, i, &tmp);
-    printf ("LPM of [");
-    print_key_chars (key, i);
-    printf ("](%d) is [", i);
-    print_key_chars (key, rc);
-    printf ("] V=%ld\n", tmp);
-
-
-    rc = prefix_tree_delete (tree_p, key, i, value_leq , &value);
-    printf ("delete [");
-    print_key_chars (key, i);
-    printf ("] cond V<%ld rc=%d\n", value, rc);
+    prefix_tree_delete (tree_p, key, i, value_leq , &value);
     free (key);
-
-    traverse_tree_inorder (*tree_p, 0);
   }
 }
 
@@ -185,7 +166,7 @@ void compress_file (FILE *in, FILE *out) {
         // Remove all subarrays with lengths between 2 and 15 begining with
         // the oldest byte in queue pointable and has a value less than 
         // [compressed - PTR_SIZE] from the prefix tree
-        delete_old_prefixes (&tree, pointable, compressed - PTR_SIZE);
+        delete_queue_head_prefixes (&tree, pointable, compressed - PTR_SIZE);
       }
       queue_add (pointable, byte);
     }
