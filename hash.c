@@ -40,8 +40,8 @@ void hash_destroy (hash_t **hash_p) {
   *hash_p = NULL;
 }
 
-int hash_code (uint8_t *key, int key_len) {
-  int h, i;
+uint32_t hash_code (uint8_t *key, int key_len) {
+  uint32_t h, i;
   h = 0;
   for (i = 0; i < key_len; i++) {
     h = (31 * h) + key[i];
@@ -75,7 +75,8 @@ void list_destroy (list_t **list_p) {
  * If key is alreay in table, update value
  */
 void hash_insert (hash_t *hash, uint8_t *key, int key_len, uint64_t value) {
-  int h, diff;
+  uint32_t h;
+  int diff;
   list_t **list_p, *list;
 
   h = hash_code (key, key_len) % hash->size;
@@ -117,7 +118,8 @@ void hash_insert (hash_t *hash, uint8_t *key, int key_len, uint64_t value) {
  */
 void hash_delete (hash_t *hash, uint8_t *key, int key_len,
     int (*fn)(uint64_t value, uint64_t arg), uint64_t arg) {
-  int h, diff;
+  uint32_t h;
+  int diff;
   list_t **list_p, *list;
 
   h = hash_code (key, key_len) % hash->size;
@@ -157,7 +159,8 @@ void hash_delete (hash_t *hash, uint8_t *key, int key_len,
  * return 0 if key-value is found, -1 otherwise
  */
 int hash_lookup (hash_t *hash, uint8_t *key, int key_len, uint64_t *value) {
-  int h, diff;
+  uint32_t h;
+  int diff;
   list_t **list_p, *list;
 
   h = hash_code (key, key_len) % hash->size;

@@ -7,38 +7,39 @@
 #include <unistd.h>
 #include "bit_stream.h"
 #include "compression.h"
+#include "hash.h"
 #include "queue.h"
-#include "prefix_tree.h"
 
-int value_leq (prefix_tree_t *tree, void *arg) {
-  uint64_t *value = arg;
-  return tree->value <= *value;
+int value_leq (uint64_t value, uint64_t arg) {
+  return value <= value;
 }
 
 void insert_queue_head_prefixes (
-    prefix_tree_t **tree_p, queue_t *queue, uint64_t value, int max_len
+    hash_t *hash, uint8_t *key, int key_len, uint64_t value
     ) {
   int i;
-  uint8_t *key;
-
-  key = queue_sub_array (queue, 0, max_len);
-  for (i = 2; i <= max_len; i++) {
-    prefix_tree_insert (tree_p, key, i, value);
+  for (i = 2; i <= key_len; i++) {
+    hash_insert (hash, key, i, value);
   }
-  free (key);
 }
 
 void delete_queue_head_prefixes (
-    prefix_tree_t **tree_p, queue_t *queue, uint64_t value, int max_len
+    hash_t *hash, uint8_t *key, int key_len, uint64_t value
     ) {
   int i;
-  uint8_t *key;
-
-  key = queue_sub_array (queue, 0, max_len);
-  for (i = max_len; i >= 2; i--) {
-    prefix_tree_delete (tree_p, key, i, value_leq , &value);
+  for (i = key_len; i >= 2; i--) {
+    hash_delete (hash, key, i, value_leq, value);
   }
-  free (key);
+}
+
+int find_longest_prefix_match (
+    hash_t *hash, uint8_t *key, int key_len, uint64_t *value
+    ) {
+  int i;
+  for (i = key_len; i > 1; i--) {
+    if (hash_lookup (hash, key, i, value) == 0) return i;
+  }
+  return 0;
 }
 
 void compress_file (FILE *in, FILE *out) {
@@ -48,7 +49,7 @@ void compress_file (FILE *in, FILE *out) {
   uint64_t compressed, value;
   struct stat file_stat;
   bit_out_stream_t *out_stream;
-  prefix_tree_t *tree;
+  hash_t *hash;
   queue_t *pointable, *pending;
 
   if (fstat (fileno (in), &file_stat) != 0) {
@@ -63,7 +64,7 @@ void compress_file (FILE *in, FILE *out) {
   // <pointer,len> can be <0,15>
   pending = queue_new (0xF);
   out_stream = bit_out_stream_new (out);
-  tree =prefix_tree_new (NULL, 0, 0, 0);
+  hash = hash_new (PTR_SIZE * 14);
   compressed = 0;
 
   printf ("Compressing...\n");
@@ -76,11 +77,11 @@ void compress_file (FILE *in, FILE *out) {
     if (pending->length == pending->size || c == EOF) {
       // Find the longest prefix match
       key = queue_sub_array (pending, 0, pending->length);
-      matched = prefix_tree_longest_match (tree, key, pending->length, &value);
-      free (key);
+      matched = find_longest_prefix_match (hash, key, pending->length, &value);
 
-      // Insert subarrays starting at this byte into prefix tree
-      insert_queue_head_prefixes (&tree, pending, compressed + 1, pending->length);
+      // Insert subarrays starting at this byte into hash table
+      insert_queue_head_prefixes (hash, key, pending->length, compressed + 1);
+      free (key);
 
       queue_pop (pending, &byte);
       // printf ("processing '%c': ", byte);
@@ -111,8 +112,10 @@ void compress_file (FILE *in, FILE *out) {
       if (pointable->length == pointable->size) {
         // Remove all subarrays with lengths between 2 and 15 begining with
         // the oldest byte in queue pointable and has a value less than 
-        // [compressed - PTR_SIZE] from the prefix tree
-        delete_queue_head_prefixes (&tree, pointable, compressed - PTR_SIZE, 0xF);
+        // [compressed - PTR_SIZE] from the hash table
+        key = queue_sub_array (pointable, 0, 0xF);
+        delete_queue_head_prefixes (hash, key, 0xF, compressed - PTR_SIZE);
+        free (key);
       }
       queue_add (pointable, byte);
     }
@@ -125,7 +128,7 @@ void compress_file (FILE *in, FILE *out) {
   printf("Done\n");
 
   bit_out_stream_destroy (&out_stream);
-  prefix_tree_destroy (&tree);
+  hash_destroy (&hash);
   queue_destroy (&pointable);
   queue_destroy (&pending);
   fclose (in);
