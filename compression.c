@@ -42,6 +42,14 @@ void print_tree_inorder (prefix_tree_t *tree, int depth) {
   }
 }
 
+int get_num_child (prefix_tree_t *tree) {
+  int i, count = 0;
+  for (i = 0; i < CHILD_SIZE; i++) {
+    if (tree->child[i]) count++;
+  }
+  return count;
+}
+
 void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
   int i;
   if (tree) {
@@ -49,15 +57,16 @@ void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
       assert (tree->key);
       assert (tree->key_len);
     }
+    assert (tree->num_child == get_num_child (tree));
     for (i = 0; i < 0x100; i++) {
       traverse_tree_inorder (tree->child[i], depth + 1);
     }
   }
 }
 
-int value_less_than (prefix_tree_t *tree, void *arg) {
+int value_leq (prefix_tree_t *tree, void *arg) {
   uint64_t *value = arg;
-  return tree->value < *value;
+  return tree->value <= *value;
 }
 
 void insert_queue_head_prefixes (
@@ -74,24 +83,38 @@ void insert_queue_head_prefixes (
     // printf ("]\n");
     prefix_tree_insert (tree_p, key, i, value);
     free (key);
+
+    // traverse_tree_inorder (*tree_p, 0);
   }
 }
 
 void delete_old_prefixes (
     prefix_tree_t **tree_p, queue_t *queue, uint64_t value
     ) {
-  int i;
+  int i, rc;
   uint8_t *key;
+  uint64_t tmp;
 
   // Prefix lengths in [2,15]
   for (i = 2; i < 0x10; i++) {
     key = queue_sub_array (queue, 0, i);
-    prefix_tree_delete (tree_p, key, i, value_less_than, &value);
-    // printf ("delete [");
-    // print_key_chars (key, i);
-    // printf ("] rc=%d\n", rc);
+
+    rc = prefix_tree_longest_match (*tree_p, key, i, &tmp);
+    printf ("LPM of [");
+    print_key_chars (key, i);
+    printf ("](%d) is [", i);
+    print_key_chars (key, rc);
+    printf ("] V=%ld\n", tmp);
+
+
+    rc = prefix_tree_delete (tree_p, key, i, value_leq , &value);
+    printf ("delete [");
+    print_key_chars (key, i);
+    printf ("] cond V<%ld rc=%d\n", value, rc);
     free (key);
-    }
+
+    traverse_tree_inorder (*tree_p, 0);
+  }
 }
 
 void compress_file (FILE *in, FILE *out) {
@@ -147,6 +170,7 @@ void compress_file (FILE *in, FILE *out) {
           if (write_12bits (out_stream, pointer) != 0) break;
           if (write_4bits (out_stream, matched) != 0) break;
           // printf ("<1,%d,%d>\n", pointer, matched);
+
           skip = matched - 1;
 
         } else {

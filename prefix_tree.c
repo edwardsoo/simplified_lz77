@@ -61,9 +61,11 @@ void prefix_tree_insert (
         *tree_p = prefix_tree_new (key, len, value, 1);
 
       } else { // Non-empty tree with empty root
+        if (!tree->child[key[0]]) {
+          tree->num_child += 1;
+        }
         prefix_tree_insert (tree->child + key[0], key, len, value);
         assert (tree->num_child > 1);
-        tree->num_child += 1;
       }
 
     } else {
@@ -80,7 +82,7 @@ void prefix_tree_insert (
 
       } else if (tree->key_len < len && matched == tree->key_len) {
         // the tree's key is a subarray of the new key
-        if (!tree->child[key[0]]) {
+        if (!tree->child[key[matched]]) {
           tree->num_child += 1;
         }
         prefix_tree_insert (tree->child + key[matched],
@@ -94,8 +96,9 @@ void prefix_tree_insert (
         new->child[tree->key[matched]] = tree;
         new->num_child = 1;
         memmove (tree->key, tree->key + matched, tree->key_len - matched);
-        tree->key = realloc (tree->key, tree->key_len - matched);
         tree->key_len -= matched;
+        tree->key = realloc (tree->key, sizeof (uint8_t) * tree->key_len);
+
         assert (tree->key_len > 0 && tree->key_len < 0xF);
 
       } else if (tree->key_len == len && matched == len) {
@@ -111,6 +114,7 @@ void prefix_tree_insert (
         new->child[tree->key[matched]] = tree;
         memmove (tree->key, tree->key + matched, tree->key_len - matched);
         tree->key_len -= matched;
+        tree->key = realloc (tree->key, sizeof (uint8_t) * tree->key_len);
 
         new->child[key[matched]] = prefix_tree_new (key + matched,
             len - matched, value, 1);
@@ -157,7 +161,6 @@ int prefix_tree_longest_match (
 
 void merge_with_only_child (prefix_tree_t **tree_p) {
   int i;
-  uint8_t *ptr;
   prefix_tree_t *tree, *child;
   tree = *tree_p;
   child = NULL;
@@ -165,6 +168,7 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
   for (i = 0; i < CHILD_SIZE; i++) {
     if (tree->child[i]) {
       child = tree->child[i];
+      tree->child[i] = NULL;
       break;
     }
   }
@@ -174,12 +178,11 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
     assert (!tree->child[i]);
   }
 
-  ptr = child->key;
-  child->key = malloc (sizeof (uint8_t) * (tree->key_len + child->key_len));
-  memcpy (child->key, tree->key, tree->key_len);
-  memcpy (child->key + tree->key_len, ptr, child->key_len);
+  child->key = realloc (child->key,
+      sizeof (uint8_t) * (tree->key_len + child->key_len));
+  memmove (child->key + tree->key_len, child->key, child->key_len);
+  memmove (child->key, tree->key, tree->key_len);
   child->key_len += tree->key_len;
-  free (ptr);
   prefix_tree_destroy (tree_p);
   *tree_p = child;
 }
@@ -193,35 +196,28 @@ int prefix_tree_delete (
   tree = *tree_p;
 
   if (!tree) {
-    WHERE();
     return -1;
 
   } else {
-    assert (tree > 0x1000);
     matched = num_prefix_match (tree->key, key, tree->key_len, len);
 
     if (tree->key_len == matched && matched == len) { // keys match
       if (tree->has_value && (!fn || fn (tree, arg))) {
         if (tree->num_child > 1) {
           // Prefix at least 2 sub-trees, turn into internal node
-          WHERE();
           tree->has_value = 0;
 
         } else if (tree->num_child == 0) {
-          WHERE();
           prefix_tree_destroy (tree_p);
 
         } else {
           // Only has 1 child, merge node & key with child's
-          WHERE();
           merge_with_only_child (tree_p);
           assert (*tree_p);
         }
-        WHERE();
         return 0;
 
       } else { // No value or value fails evaluation function
-        WHERE();
         return -1;
       }
     } else if (len > matched && tree->child[key[matched]]) {
@@ -232,21 +228,17 @@ int prefix_tree_delete (
       if (rc == 0) {
         if (tree->child[key[matched]] == NULL) {
           // Sub-tree was pruned
-          WHERE();
           tree->num_child -= 1;
         }
         if (!tree->has_value && tree->num_child == 1) {
-          WHERE();
           merge_with_only_child (tree_p);
           assert (*tree_p);
         }
       } else {
-        WHERE();
       }
       return rc;
 
     } else {
-      WHERE();
       return -1;
     }
   }
