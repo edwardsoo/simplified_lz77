@@ -1,0 +1,69 @@
+Author: Edward Soo
+Date: 03/24/2014
+
+###############################################################################
+  PROBLEM:
+###############################################################################  
+
+Almost-LZ77 compression
+Given a description of the compressed data format,
+write code that compresses/decompresses files.
+
+First, the compressed format:
+A 0 bit followed by eight bits means just copy the eight bits to the output directly.
+A 1 bit is followed by a pointer of 12 bits followed by a length encoded in 4 bits.
+This is to be interpreted as "copy the <length> bytes from <pointer> bytes ago in the output to the current location".
+
+For example:
+
+"mahi mahi" can be compressed as:
+
+<0,'m'><0,'a'><0,'h'><0,'i'><0,' '><1,4,4>
+
+Original size = 9 bytes, compressed = just under 8 bytes.
+
+You don't need to produce optimal compression (hard), greedy matching is fine.
+However, we want something that runs as fast as possible,
+without taking too much code (use your discretion).
+
+The compressor and decompressor should take binary files as input and output.
+If you're familiar with Lempel-Ziv compressors, this is a simplified LZ77 compressor.
+
+
+###############################################################################
+  SOLUTION:
+###############################################################################
+
+OBSERVATIONS:
+
+When decompressing, only the last 2^12 = 4096 bytes output need to be buffered as bytes output before cannot be pointed to by a 12 bits POINTER.
+Commands with <length> greater than <pointer> + 1 are a valid, the decompressor just has to copy one byte at a time.
+
+A 4 bits LENGTH means the compressor should only look for patterns with length less than 2^4 = 16.
+Patterns with length less than 2 should not be compressed with <1,POINTER,LENGTH> as the compressed format takes 17 bits.
+
+
+DECOMPRESSION:
+
+A fixed size circular buffer is used to buffer the outputted 4096 bytes.
+For each <0,VALUE> command read, VALUE is added to the buffer.
+When a <1,POINTER,LENGTH> is read, the decompressor index the cirular buffer POINTER bytes from its tail and copy LENGTH bytes,
+it also add these bytes back to the buffer.
+
+
+COMPRESSION:
+
+A prefix tree is used for pattern comparisons. Every time a byte is compressed, whether as a <0,VALUE> or <1,POINTER,LENGTH>,
+patterns with lengths 2 - 15 starting with that byte are inserted into the tree with value = [# of bytes compressed] for lookups later.
+
+2 Circular buffers are used during compression: one (PENDING) for building patterns to be inserted into the prefix tree,
+another (POINTABLE) is used for keeping track of patterns that are pointable by the next compression command.
+
+For each byte read from the file to be compressed, it is first added to PENDING.
+When PENDING is full, the 15 bytes long pattern starting at the oldest byte is looked up using longest prefix match.
+If a pattern with length greater than 2 is found, <1,POINTER,LENGTH> is written. Otherwise, <0,VALUE> is written.
+The byte popped is then added to the POINTABLE tree.
+To keep the prefix tree sparse, when the POINTABLE buffer is full,
+patterns of length 2 - 15 starting with the oldest byte are looked up and deleted if their value is no longer pointable.
+
+When every byte from the file to be compressed is read, remaining bytes in PENDING are processed in the same way until it is empty.
