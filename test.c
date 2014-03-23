@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,10 +6,13 @@
 #include <unistd.h>
 #include "bit_stream.h"
 #include "compression.h"
-#include "prefix_tree.h"
 #include "queue.h"
+#include "hash.h"
 
+#ifndef __WHERE__
+#define __WHERE__
 #define WHERE() printf("%u\n", __LINE__)
+#endif
 
 void test_compress_file (FILE *in, FILE *out) {
   bit_out_stream_t *out_stream;
@@ -46,95 +50,6 @@ void test_compress_file_2 (FILE *in, FILE *out) {
 
   bit_out_stream_destroy (&out_stream);
   fclose (in);
-}
-
-void print_tree_inorder (prefix_tree_t *tree, int depth) {
-  int i;
-
-  if (tree) {
-    printf ("%*sprefix = [", depth, "");
-    for (i = 0; i < tree->key_len; i++) {
-      printf ("0x%x ", tree->key[i]);
-    }
-    if (tree->has_value) {
-      printf("] value = %ld\n", tree->value);
-    } else {
-      printf("] value = NULL\n");
-    }
-    for (i = 0; i < 0x100; i++) {
-      print_tree_inorder (tree->child[i], depth + 1);
-    }
-  }
-}
-
-void test_prefix_tree_1 () {
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "ab", 2, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 2);
-  print_tree_inorder (tree, 0);
-  prefix_tree_destroy (&tree);
-}
-
-void test_prefix_tree_2 () {
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "ab", 2, 2);
-  print_tree_inorder (tree, 0);
-  prefix_tree_destroy (&tree);
-}
-
-void test_prefix_tree_3 () {
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 2);
-  print_tree_inorder (tree, 0);
-  prefix_tree_destroy (&tree);
-}
-
-void test_prefix_tree_4 () {
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "abd", 3, 2);
-  print_tree_inorder (tree, 0);
-  prefix_tree_destroy (&tree);
-}
-
-void test_prefix_tree_5 () {
-  uint64_t key;
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "a", 1, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "ab", 2, 2);
-  prefix_tree_insert (&tree, (uint8_t*) "abd", 3, 3);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 4);
-  prefix_tree_lookup (tree, (uint8_t*) "a", 1, &key);
-  printf("a => %ld\n", key);
-  prefix_tree_lookup (tree, (uint8_t*) "ab", 2, &key);
-  printf("ab => %ld\n", key);
-  prefix_tree_lookup (tree, (uint8_t*) "abd", 3, &key);
-  printf("abd => %ld\n", key);
-  prefix_tree_lookup (tree, (uint8_t*) "abc", 3, &key);
-  printf("abc => %ld\n", key);
-  print_tree_inorder (tree, 0);
-  prefix_tree_destroy (&tree);
-}
-
-void test_prefix_tree_delete () {
-  prefix_tree_t *tree = prefix_tree_new (NULL, 0, 0, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "a", 1, 1);
-  prefix_tree_insert (&tree, (uint8_t*) "ab", 2, 2);
-  prefix_tree_insert (&tree, (uint8_t*) "abd", 3, 3);
-  prefix_tree_insert (&tree, (uint8_t*) "abc", 3, 4);
-  print_tree_inorder (tree, 0);
-  prefix_tree_delete (&tree, (uint8_t*) "a", 1, NULL, NULL);
-  print_tree_inorder (tree, 0);
-  prefix_tree_insert (&tree, (uint8_t*) "efg", 3, 1);
-  print_tree_inorder (tree, 0);
-  prefix_tree_delete (&tree, (uint8_t*) "ab", 2, NULL, NULL);
-  print_tree_inorder (tree, 0);
-  prefix_tree_delete (&tree, (uint8_t*) "abd", 3, NULL, NULL);
-  print_tree_inorder (tree, 0);
-  prefix_tree_delete (&tree, (uint8_t*) "abc", 3, NULL, NULL);
-  prefix_tree_destroy (&tree);
 }
 
 void print_uint4_bits (uint8_t value) {
@@ -224,48 +139,54 @@ void print_key_chars (uint8_t *key, int len) {
   }
 }
 
-void print_tree_inorder (prefix_tree_t *tree, int depth) {
+void print_hash_table (hash_t *hash) {
   int i;
-  if (tree) {
-    printf ("%*sK=[", depth, "");
-    print_key_chars (tree->key, tree->key_len);
-    // print_key_bytes (tree->key, tree->key_len);
-    if (tree->has_value) {
-      printf("] V=%ld", tree->value);
-    } else {
-      printf("] V=NULL");
+  list_t* list;
+
+  for (i = 0; i < hash->size; i++) {
+    if (!hash->array[i]) continue;
+    printf ("Entry[%4d] => ", i);
+    list = hash->array[i];
+    while (list) {
+      printf ("[");
+      print_key_chars (list->key, list->key_len);
+      printf ("]:%ld => ", list->value);
+      list = list->next;
     }
-    printf (" D=%d\n", depth);
-    for (i = 0; i < 0x100; i++) {
-      print_tree_inorder (tree->child[i], depth + 1);
-    }
+    printf ("\n");
   }
 }
 
-int count_num_child (prefix_tree_t *tree) {
-  int i, count = 0;
-  for (i = 0; i < CHILD_SIZE; i++) {
-    if (tree->child[i]) count++;
-  }
-  return count;
+void test_hash_insert () {
+  hash_t *hash = hash_new (0x1000);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+  hash_destroy (&hash);
 }
 
-void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
-  int i;
-  if (tree) {
-    if (tree->has_value) {
-      assert (tree->key);
-      assert (tree->key_len);
-    } else {
-      assert (tree->num_child > 1);
-    }
-    assert (tree->num_child == count_num_child (tree));
-    for (i = 0; i < 0x100; i++) {
-      traverse_tree_inorder (tree->child[i], depth + 1);
-    }
-  }
+void test_hash_insert_2 () {
+  hash_t *hash = hash_new (0x1);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+  hash_destroy (&hash);
 }
 
 int main (int argc, char* argv[]) {
+  test_hash_insert ();
+  test_hash_insert_2 ();
   return 0;
 }

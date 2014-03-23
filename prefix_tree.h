@@ -1,7 +1,6 @@
 #ifndef PREFIX_TREE_H
 #define PREFIX_TREE_H
 #define CHILD_SIZE 0x100
-#define WHERE() printf("%d\n",__LINE__)
 
 /* Prefix tree to help find matching consecutive bytes
  */
