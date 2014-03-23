@@ -16,30 +16,29 @@ int value_leq (prefix_tree_t *tree, void *arg) {
 }
 
 void insert_queue_head_prefixes (
-    prefix_tree_t **tree_p, queue_t *queue, uint64_t value
+    prefix_tree_t **tree_p, queue_t *queue, uint64_t value, int max_len
     ) {
   int i;
   uint8_t *key;
 
-  for (i = queue->length; i > 1; i--) {
-    key = queue_sub_array (queue, 0, i);
+  key = queue_sub_array (queue, 0, max_len);
+  for (i = 2; i <= max_len; i++) {
     prefix_tree_insert (tree_p, key, i, value);
-    free (key);
   }
+  free (key);
 }
 
 void delete_queue_head_prefixes (
-    prefix_tree_t **tree_p, queue_t *queue, uint64_t value
+    prefix_tree_t **tree_p, queue_t *queue, uint64_t value, int max_len
     ) {
   int i;
   uint8_t *key;
 
-  // Prefix lengths in [2,15]
-  for (i = 2; i < 0x10; i++) {
-    key = queue_sub_array (queue, 0, i);
+  key = queue_sub_array (queue, 0, max_len);
+  for (i = max_len; i >= 2; i--) {
     prefix_tree_delete (tree_p, key, i, value_leq , &value);
-    free (key);
   }
+  free (key);
 }
 
 void compress_file (FILE *in, FILE *out) {
@@ -81,7 +80,7 @@ void compress_file (FILE *in, FILE *out) {
       free (key);
 
       // Insert subarrays starting at this byte into prefix tree
-      insert_queue_head_prefixes (&tree, pending, compressed + 1);
+      insert_queue_head_prefixes (&tree, pending, compressed + 1, pending->length);
 
       queue_pop (pending, &byte);
       // printf ("processing '%c': ", byte);
@@ -113,7 +112,7 @@ void compress_file (FILE *in, FILE *out) {
         // Remove all subarrays with lengths between 2 and 15 begining with
         // the oldest byte in queue pointable and has a value less than 
         // [compressed - PTR_SIZE] from the prefix tree
-        delete_queue_head_prefixes (&tree, pointable, compressed - PTR_SIZE);
+        delete_queue_head_prefixes (&tree, pointable, compressed - PTR_SIZE, 0xF);
       }
       queue_add (pointable, byte);
     }
@@ -123,7 +122,7 @@ void compress_file (FILE *in, FILE *out) {
       queue_add (pending, c);
     }
   }
-  printf("100%%\n");
+  printf("Done\n");
 
   bit_out_stream_destroy (&out_stream);
   prefix_tree_destroy (&tree);
@@ -174,7 +173,7 @@ void decompress_file (FILE *in, FILE *out) {
       }
     }
   }
-  printf("100%%\n");
+  printf("Done\n");
 
   bit_in_stream_destroy (&in_stream);
   queue_destroy (&queue);
