@@ -155,6 +155,7 @@ void print_hash_table (hash_t *hash) {
     }
     printf ("\n");
   }
+  printf ("\n");
 }
 
 void test_hash_insert () {
@@ -185,8 +186,130 @@ void test_hash_insert_2 () {
   hash_destroy (&hash);
 }
 
+int test_value_leq (uint64_t value, uint64_t arg) {
+  return (value <= arg);
+}
+
+void test_hash_delete () {
+  hash_t *hash = hash_new (0x1000);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+
+  hash_delete (hash, (uint8_t*) "abcd", 4, NULL, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "bcde", 4, test_value_leq, 8);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "zZZZ", 4, NULL, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "abc", 3, NULL, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "a", 1, test_value_leq, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "a", 1, test_value_leq, 10);
+  print_hash_table (hash);
+  hash_destroy (&hash);
+}
+
+void test_hash_delete_2 () {
+  hash_t *hash = hash_new (0x1);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+
+  hash_delete (hash, (uint8_t*) "abcd", 4, NULL, 5);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "bcde", 4, test_value_leq, 8);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "zZZZ", 4, test_value_leq, 100);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "abc", 3, NULL, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "a", 1, test_value_leq, 0);
+  print_hash_table (hash);
+  hash_delete (hash, (uint8_t*) "a", 1, test_value_leq, 10);
+  print_hash_table (hash);
+  hash_destroy (&hash);
+}
+
+void test_hash_lookup () {
+  uint64_t value;
+  hash_t *hash = hash_new (0x100);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+
+  hash_lookup (hash, (uint8_t*) "a", 1, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "ab", 2, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "abc", 3, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "abcd", 4, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "b", 1, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bc", 2, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bcd", 3, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bcde", 4, &value);
+  printf ("value %ld\n", value);
+  hash_destroy (&hash);
+}
+
+void test_hash_lookup_2 () {
+  uint64_t value;
+  hash_t *hash = hash_new (0x1);
+  hash_insert (hash, (uint8_t*) "a", 1, 1);
+  hash_insert (hash, (uint8_t*) "ab", 2, 2);
+  hash_insert (hash, (uint8_t*) "abc", 3, 3);
+  hash_insert (hash, (uint8_t*) "abcd", 4, 4);
+  hash_insert (hash, (uint8_t*) "b", 1, 5);
+  hash_insert (hash, (uint8_t*) "bc", 2, 6);
+  hash_insert (hash, (uint8_t*) "bcd", 3, 7);
+  hash_insert (hash, (uint8_t*) "bcde", 4, 8);
+  print_hash_table (hash);
+
+  hash_lookup (hash, (uint8_t*) "a", 1, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "ab", 2, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "abc", 3, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "abcd", 4, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "b", 1, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bc", 2, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bcd", 3, &value);
+  printf ("value %ld\n", value);
+  hash_lookup (hash, (uint8_t*) "bcde", 4, &value);
+  printf ("value %ld\n", value);
+  hash_destroy (&hash);
+}
+
 int main (int argc, char* argv[]) {
-  test_hash_insert ();
-  test_hash_insert_2 ();
+  test_hash_lookup ();
+  test_hash_lookup_2 ();
   return 0;
 }

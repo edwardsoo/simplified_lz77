@@ -71,6 +71,9 @@ void list_destroy (list_t **list_p) {
   *list_p = NULL;
 }
 
+/* Insert key-value into hash table.
+ * If key is alreay in table, update value
+ */
 void hash_insert (hash_t *hash, uint8_t *key, int key_len, uint64_t value) {
   int h, diff;
   list_t **list_p, *list;
@@ -109,6 +112,9 @@ void hash_insert (hash_t *hash, uint8_t *key, int key_len, uint64_t value) {
   hash->count += 1;
 }
 
+/* Delete key-value from hash table.
+ * If key not found on table then the table is not modified
+ */
 void hash_delete (hash_t *hash, uint8_t *key, int key_len,
     int (*fn)(uint64_t value, uint64_t arg), uint64_t arg) {
   int h, diff;
@@ -146,4 +152,38 @@ void hash_delete (hash_t *hash, uint8_t *key, int key_len,
   }
 }
 
-int hash_lookup (hash_t *hash, uint8_t *key, int key_len, uint64_t *value);
+/* Lookup the value mapped by a key in the hash table.
+ * The value is place in address supplied,
+ * return 0 if key-value is found, -1 otherwise
+ */
+int hash_lookup (hash_t *hash, uint8_t *key, int key_len, uint64_t *value) {
+  int h, diff;
+  list_t **list_p, *list;
+
+  h = hash_code (key, key_len) % hash->size;
+  list_p = hash->array + h;
+
+  while (*list_p) {
+    list = *list_p;
+
+    if (list->key_len > key_len) {
+      // Key not in table
+      return -1;
+
+    } else if (list->key_len == key_len) {
+      diff = memcmp (key, list->key, key_len);
+
+      if (diff == 0) {
+        // Found key
+        *value = list->value;
+        return 0;
+
+      } else if (diff < 0) {
+        // Key not in table
+        return -1;
+      }
+    }
+    list_p = &(list->next);
+  }
+  return -1;
+}
