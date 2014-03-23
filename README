@@ -1,8 +1,22 @@
 Author: Edward Soo
 Date: 03/24/2014
 
+
 ###############################################################################
-  PROBLEM:
+  Instruction:
+###############################################################################
+
+Run 'make' to build the executable.
+
+Use './simplifed_lz77 -c FILE COMPRESSED' to compress a file,
+where FILE is the file to be compressed, and COMPRESSED is the name of the compressed binary to be output.
+
+Use './simplifed_lz77 -d COMPRESSED DECOMPRESSED' to decompress a file,
+where COMPRESSED is the file to be decompressed and DECOMPRESSED is the name of the decompressed binary to be output
+
+
+###############################################################################
+  Problem:
 ###############################################################################  
 
 Almost-LZ77 compression
@@ -31,10 +45,8 @@ If you're familiar with Lempel-Ziv compressors, this is a simplified LZ77 compre
 
 
 ###############################################################################
-  SOLUTION:
+  Observations:
 ###############################################################################
-
-OBSERVATIONS:
 
 When decompressing, only the last 2^12 = 4096 bytes output need to be buffered as bytes output before cannot be pointed to by a 12 bits POINTER.
 Commands with <length> greater than <pointer> + 1 are a valid, the decompressor just has to copy one byte at a time.
@@ -43,7 +55,9 @@ A 4 bits LENGTH means the compressor should only look for patterns with length l
 Patterns with length less than 2 should not be compressed with <1,POINTER,LENGTH> as the compressed format takes 17 bits.
 
 
-DECOMPRESSION:
+###############################################################################
+  Decompressor implementations:
+###############################################################################
 
 A fixed size circular buffer is used to buffer the outputted 4096 bytes.
 For each <0,VALUE> command read, VALUE is added to the buffer.
@@ -51,7 +65,9 @@ When a <1,POINTER,LENGTH> is read, the decompressor index the cirular buffer POI
 it also add these bytes back to the buffer.
 
 
-COMPRESSION:
+###############################################################################
+  Compressor implementations:
+###############################################################################
 
 A prefix tree is used for pattern comparisons. Every time a byte is compressed, whether as a <0,VALUE> or <1,POINTER,LENGTH>,
 patterns with lengths 2 - 15 starting with that byte are inserted into the tree with value = [# of bytes compressed] for lookups later.
