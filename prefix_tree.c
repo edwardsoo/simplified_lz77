@@ -132,19 +132,23 @@ int prefix_tree_longest_match (
       tree->key_len == matched && tree->has_value && 
       (len == matched || !tree->child[key[matched]])
      ) {
+    // Found perfect match
     *value = tree->value;
     return matched;
 
   } else if (
       len > matched && matched == tree->key_len && tree->child[key[matched]]
       ) {
+    // Tree's prefix is a proper subarray of the lookup prefix
     rc = prefix_tree_longest_match (tree->child[key[matched]], key + matched,
        len - matched, value);
 
     if (rc > 0) {
+      // Found longer match in sub-trees
       return rc + matched;
 
     } else if (tree->has_value) {
+      // Could not find longer match in sub-trees, return this
       *value = tree->value;
       return matched;
 
@@ -157,6 +161,9 @@ int prefix_tree_longest_match (
   }
 }
 
+/* This is a helper function that finds the first non-NULL child of a tree
+ * and merge with its prefix node. Assume tree has only 1 child.
+ */
 void merge_with_only_child (prefix_tree_t **tree_p) {
   int i;
   prefix_tree_t *tree, *child;
@@ -169,9 +176,6 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
       tree->child[i] = NULL;
       break;
     }
-  }
-
-  for (i++; i < CHILD_SIZE; i++) {
   }
 
   child->key = realloc (child->key,
@@ -198,7 +202,8 @@ int prefix_tree_delete (
   } else {
     matched = num_prefix_match (tree->key, key, tree->key_len, len);
 
-    if (tree->key_len == matched && matched == len) { // keys match
+    if (tree->key_len == matched && matched == len) {
+      // Perfect match
       if (tree->has_value && (!fn || fn (tree, arg))) {
         if (tree->num_child > 1) {
           // Prefix at least 2 sub-trees, turn into internal node

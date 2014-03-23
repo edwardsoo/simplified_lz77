@@ -10,9 +10,6 @@ all:    $(MAIN)
 simplified_lz77: simplified_lz77.o $(OBJECTS)
 	$(CC) $(CFLAGS) -o simplified_lz77 simplified_lz77.o $(OBJECTS)
 
-test: test.o $(OBJECTS)
-	$(CC) $(CFLAGS) -o test test.o $(OBJECTS)
-
 .c.o:
 	$(CC) $(CFLAGS) -c $<  -o $@
 

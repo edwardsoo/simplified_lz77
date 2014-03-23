@@ -10,63 +10,6 @@
 #include "queue.h"
 #include "prefix_tree.h"
 
-void print_key_bytes (uint8_t *key, int len) {
-  int i;
-  for (i = 0; i < len; i++) {
-    printf ("0x%x ", key[i]);
-  }
-}
-
-void print_key_chars (uint8_t *key, int len) {
-  int i;
-  for (i = 0; i < len; i++) {
-    if (key[i] != '\n') printf ("%c", key[i]);
-    else printf ("\\n");
-  }
-}
-
-void print_tree_inorder (prefix_tree_t *tree, int depth) {
-  int i;
-  if (tree) {
-    printf ("%*sK=[", depth, "");
-    print_key_chars (tree->key, tree->key_len);
-    // print_key_bytes (tree->key, tree->key_len);
-    if (tree->has_value) {
-      printf("] V=%ld", tree->value);
-    } else {
-      printf("] V=NULL");
-    }
-    printf (" D=%d\n", depth);
-    for (i = 0; i < 0x100; i++) {
-      print_tree_inorder (tree->child[i], depth + 1);
-    }
-  }
-}
-
-int count_num_child (prefix_tree_t *tree) {
-  int i, count = 0;
-  for (i = 0; i < CHILD_SIZE; i++) {
-    if (tree->child[i]) count++;
-  }
-  return count;
-}
-
-void traverse_tree_inorder (prefix_tree_t *tree, int depth) {
-  int i;
-  if (tree) {
-    if (tree->has_value) {
-      assert (tree->key);
-      assert (tree->key_len);
-    } else {
-      assert (tree->num_child > 1);
-    }
-    assert (tree->num_child == count_num_child (tree));
-    for (i = 0; i < 0x100; i++) {
-      traverse_tree_inorder (tree->child[i], depth + 1);
-    }
-  }
-}
-
 int value_leq (prefix_tree_t *tree, void *arg) {
   uint64_t *value = arg;
   return tree->value <= *value;
