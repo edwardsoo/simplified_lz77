@@ -145,7 +145,6 @@ void compress_file (FILE *in, FILE *out) {
       } else {
         // Write compressed data
         if (matched && compressed >= value) {
-          assert (matched >= 2 && matched <= 15);
           pointer = compressed - value;
           if (write_1bit (out_stream, 1) != 0) break;
           if (write_12bits (out_stream, pointer) != 0) break;

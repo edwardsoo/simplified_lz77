@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,7 +54,6 @@ void prefix_tree_insert (
 
   } else {
     if (tree->key_len == 0) { // Root's key is empty
-      assert (tree->num_child != 1);
       if (tree->num_child == 0) { // Empty tree
         prefix_tree_destroy (tree_p);
         *tree_p = prefix_tree_new (key, len, value, 1);
@@ -65,7 +63,6 @@ void prefix_tree_insert (
           tree->num_child += 1;
         }
         prefix_tree_insert (tree->child + key[0], key, len, value);
-        assert (tree->num_child > 1);
       }
 
     } else {
@@ -100,7 +97,6 @@ void prefix_tree_insert (
         tree->key_len -= matched;
         tree->key = realloc (tree->key, sizeof (uint8_t) * tree->key_len);
 
-        assert (tree->key_len > 0 && tree->key_len < 0xF);
 
       } else if (tree->key_len == len && matched == len) {
         // exact key match
@@ -175,9 +171,7 @@ void merge_with_only_child (prefix_tree_t **tree_p) {
     }
   }
 
-  assert (child != NULL);
   for (i++; i < CHILD_SIZE; i++) {
-    assert (!tree->child[i]);
   }
 
   child->key = realloc (child->key,
@@ -216,7 +210,6 @@ int prefix_tree_delete (
         } else {
           // Only has 1 child, merge node & key with child's
           merge_with_only_child (tree_p);
-          assert (*tree_p);
         }
         return 0;
 
@@ -235,7 +228,6 @@ int prefix_tree_delete (
         }
         if (!tree->has_value && tree->num_child == 1) {
           merge_with_only_child (tree_p);
-          assert (*tree_p);
         }
       } else {
       }
