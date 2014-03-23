@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "bit_stream.h"
 #include "compression.h"
@@ -102,10 +103,18 @@ void compress_file (FILE *in, FILE *out) {
   int c, matched, skip;
   uint8_t byte, *key;
   uint16_t pointer;
-  uint64_t read, compressed, value;
+  uint64_t compressed, value;
+  struct stat file_stat;
   bit_out_stream_t *out_stream;
   prefix_tree_t *tree;
   queue_t *pointable, *pending;
+
+  if (fstat (fileno (in), &file_stat) != 0) {
+    perror ("fstat");
+    fclose (in);
+    fclose (out);
+    return;
+  }
 
   // Buffer pointable compressed bytes
   pointable = queue_new (PTR_SIZE);
@@ -113,23 +122,19 @@ void compress_file (FILE *in, FILE *out) {
   pending = queue_new (0xF);
   out_stream = bit_out_stream_new (out);
   tree =prefix_tree_new (NULL, 0, 0, 0);
-  read = 0;
   compressed = 0;
 
+  printf ("Compressing...\n");
   while ((c = fgetc (in)) != EOF || pending->length) {
+    if (compressed % 0x100 == 0) {
+      printf ("%ld%%\r", compressed * 100 / file_stat.st_size);
+    }
+
     // Compress a byte if queue pending is full or finished reading from file
     if (pending->length == pending->size || c == EOF) {
       // Find the longest prefix match
       key = queue_sub_array (pending, 0, pending->length);
       matched = prefix_tree_longest_match (tree, key, pending->length, &value);
-
-     // if (matched) {
-      //   printf ("LPM of [");
-      //   print_key_chars (key, pending->length);
-      //   printf ("](%d) is [", pending->length);
-      //   print_key_chars (key, matched);
-      //   printf ("] V=%ld\n", value);
-      // }
       free (key);
 
       // Insert subarrays starting at this byte into prefix tree
@@ -173,9 +178,9 @@ void compress_file (FILE *in, FILE *out) {
     if (c != EOF) {
       // Read a byte from file
       queue_add (pending, c);
-      read += 1;
     }
   }
+  printf("100%%\n");
 
   bit_out_stream_destroy (&out_stream);
   prefix_tree_destroy (&tree);
@@ -193,7 +198,11 @@ void decompress_file (FILE *in, FILE *out) {
   in_stream = bit_in_stream_new (in);
   queue = queue_new (PTR_SIZE);
 
+  printf ("Decompressing...\n");
   while (read_1bit (in_stream, &op_bit) == 0) {
+    if (in_stream->read % 0x100 == 0) {
+      printf ("%ld%%\r", in_stream->read * 100 / in_stream->file_size);
+    }
     if (!op_bit) {
       if (read_8bits (in_stream, &byte) != 0) break;
       // printf ("<0,'%c'>\n", byte);
@@ -214,9 +223,6 @@ void decompress_file (FILE *in, FILE *out) {
         }
       } else {
         copy = queue_sub_array (queue, queue->length - 1 - pointer, length);
-        // printf ("copy [");
-        // print_key_bytes (copy, length);
-        // printf ("]\n");
         for (i = 0; i < length; i++) {
           queue_add (queue, copy[i]);
         }
@@ -225,6 +231,7 @@ void decompress_file (FILE *in, FILE *out) {
       }
     }
   }
+  printf("100%%\n");
 
   bit_in_stream_destroy (&in_stream);
   queue_destroy (&queue);
