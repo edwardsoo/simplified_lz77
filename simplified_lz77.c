@@ -3,10 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "bit_stream.h"
 #include "compression.h"
-#include "queue.h"
-#include "prefix_tree.h"
 
 int main (int argc, char* argv[]) {
   int c;
